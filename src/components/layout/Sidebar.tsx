@@ -39,6 +39,11 @@ function Sidebar() {
             >
         <ListItemText primary="Utilisateurs" />
         </ListItemButton>
+        <ListItemButton
+          onClick={() => navigate("/demandes")}
+        >
+          <ListItemText primary="Demandes" />
+        </ListItemButton>
         </RoleGuard>
 
     </List>

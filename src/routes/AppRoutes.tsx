@@ -11,6 +11,10 @@ import RoleRoute from "./RoleRoute";
 import MainLayout from "../layouts/MainLayout";
 import { ROLES } from "../utils/roles";
 
+import DemandeListPage from "../pages/demandes/DemandeListPage";
+import CreateDemandePage from "../pages/demandes/CreateDemandePage";
+import UpdateDemandePage from "../pages/demandes/UpdateDemandePage";
+
 function AppRoutes() {
   return (
     <BrowserRouter>
@@ -44,6 +48,18 @@ function AppRoutes() {
               <Route
                 path="/users/edit/:id"
                 element={<UpdateUserPage />}
+              />
+              <Route
+                path="/demandes"
+                element={<DemandeListPage />}
+              />
+              <Route
+                path="/demandes/create"
+                element={<CreateDemandePage />}
+              />
+              <Route
+                path="/demandes/edit/:id"
+                element={<UpdateDemandePage />}
               />
             </Route>
 

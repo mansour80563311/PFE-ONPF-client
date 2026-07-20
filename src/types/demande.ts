@@ -1,0 +1,83 @@
+import type { User } from "./user";
+
+export const StatutDemande = {
+  EN_ATTENTE: "EN_ATTENTE",
+  EN_COURS: "EN_COURS",
+  VALIDEE: "VALIDEE",
+  REJETEE: "REJETEE",
+} as const;
+
+export type StatutDemande =
+  (typeof StatutDemande)[keyof typeof StatutDemande];
+
+export interface Demande {
+  id: string;
+  numero: string;
+
+  nomDemandeur: string;
+  prenomDemandeur: string;
+  cin: string;
+
+  telephone: string;
+  email?: string;
+
+  referenceFonciere: string;
+  adresseBien: string;
+
+  statut: StatutDemande;
+
+  observations?: string;
+  utilisateur: User;
+
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDemandeRequest {
+  nomDemandeur: string;
+  prenomDemandeur: string;
+  cin: string;
+
+  telephone: string;
+  email?: string;
+
+  referenceFonciere: string;
+  adresseBien: string;
+
+  observations?: string;
+
+
+}
+
+export interface UpdateDemandeRequest {
+  nomDemandeur?: string;
+  prenomDemandeur?: string;
+  cin?: string;
+
+  telephone?: string;
+  email?: string;
+
+  referenceFonciere?: string;
+  adresseBien?: string;
+
+  observations?: string;
+}
+export interface DemandeResponse {
+  success: boolean;
+  message: string;
+  data: Demande;
+}
+
+export interface PaginatedDemandes {
+  success: boolean;
+  message: string;
+
+  data: Demande[];
+
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
