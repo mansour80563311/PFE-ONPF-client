@@ -25,11 +25,15 @@ import { toast } from "react-toastify";
 
 import demandeService from "../../services/demande.service";
 
-import {
-  StatutDemande,
-} from "../../types/demande";
+
 
 import type { Demande } from "../../types/demande";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import {
+  getStatusColor,
+  getStatusLabel,
+  isDemandeTerminee,
+} from "../../utils/demande";
 
 interface Props {
   demandes: Demande[];
@@ -74,24 +78,6 @@ function DemandeTable({
       toast.error(
         "Erreur lors de la suppression."
       );
-    }
-  };
-
-  const getStatusColor = (
-    statut: Demande["statut"]
-  ): "warning" | "info" | "success" | "error" => {
-    switch (statut) {
-      case StatutDemande.EN_ATTENTE:
-        return "warning";
-
-      case StatutDemande.EN_COURS:
-        return "info";
-
-      case StatutDemande.VALIDEE:
-        return "success";
-
-      case StatutDemande.REJETEE:
-        return "error";
     }
   };
 
@@ -166,13 +152,12 @@ function DemandeTable({
 
                 <TableCell>
 
-                  <Chip
-                    label={demande.statut}
-                    color={getStatusColor(
-                      demande.statut
-                    )}
-                    size="small"
-                  />
+                  
+                <Chip
+                  label={getStatusLabel(demande.statut)}
+                  color={getStatusColor(demande.statut)}
+                  size="small"
+                />
 
                 </TableCell>
 
@@ -181,27 +166,49 @@ function DemandeTable({
                   {demande.utilisateur.prenom}
                 </TableCell>
 
-                <TableCell align="center">
+              <TableCell align="center">
+                <IconButton
+                  component={Link}
+                  to={`/demandes/${demande.id}`}
+                  color="info"
+                  title="Voir la demande"
+                >
+                  <VisibilityIcon />
+                </IconButton>
 
-                  <IconButton
-                    component={Link}
-                    to={`/demandes/edit/${demande.id}`}
-                    color="primary"
-                  >
-                    <EditIcon />
-                  </IconButton>
+                <IconButton
+                  component={Link}
+                  to={`/demandes/edit/${demande.id}`}
+                  color="primary"
+                  disabled={isDemandeTerminee(
+                    demande.statut
+                  )}
+                  title={
+                    isDemandeTerminee(demande.statut)
+                      ? "Une demande terminée ne peut plus être modifiée."
+                      : "Modifier la demande"
+                  }
+                >
+                  <EditIcon />
+                </IconButton>
 
-                  <IconButton
-                    color="error"
-                    onClick={() =>
-                      handleDeleteClick(demande)
-                    }
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-
-                </TableCell>
-
+                <IconButton
+                  color="error"
+                  disabled={isDemandeTerminee(
+                    demande.statut
+                  )}
+                  title={
+                    isDemandeTerminee(demande.statut)
+                      ? "Une demande terminée ne peut plus être supprimée."
+                      : "Supprimer la demande"
+                  }
+                  onClick={() =>
+                    handleDeleteClick(demande)
+                  }
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </TableCell>
               </TableRow>
 
             ))}

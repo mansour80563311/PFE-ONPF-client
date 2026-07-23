@@ -29,6 +29,8 @@ export interface Demande {
   observations?: string;
   utilisateur: User;
 
+  motifRejet?: string | null;
+
   createdAt: string;
   updatedAt: string;
 }
@@ -80,4 +82,33 @@ export interface PaginatedDemandes {
     total: number;
     totalPages: number;
   };
+}
+
+export interface UpdateDemandeStatusRequest {
+  statut: StatutDemande;
+  motifRejet?: string;
+}
+
+export interface HistoriqueUtilisateur {
+  id: string;
+  nom: string;
+  prenom: string;
+  login: string;
+}
+
+export interface HistoriqueStatutDemande {
+  id: string;
+  ancienStatut: StatutDemande;
+  nouveauStatut: StatutDemande;
+  motif?: string | null;
+  demandeId: string;
+  utilisateurId: string;
+  createdAt: string;
+  utilisateur: HistoriqueUtilisateur;
+}
+
+export interface HistoriqueDemandeResponse {
+  success: boolean;
+  message: string;
+  data: HistoriqueStatutDemande[];
 }

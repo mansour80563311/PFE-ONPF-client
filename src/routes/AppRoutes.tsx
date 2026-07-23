@@ -15,6 +15,8 @@ import DemandeListPage from "../pages/demandes/DemandeListPage";
 import CreateDemandePage from "../pages/demandes/CreateDemandePage";
 import UpdateDemandePage from "../pages/demandes/UpdateDemandePage";
 
+import ViewDemandePage from "../pages/demandes/ViewDemandePage";
+
 function AppRoutes() {
   return (
     <BrowserRouter>
@@ -60,6 +62,10 @@ function AppRoutes() {
               <Route
                 path="/demandes/edit/:id"
                 element={<UpdateDemandePage />}
+              />
+              <Route
+                path="/demandes/:id"
+                element={<ViewDemandePage />}
               />
             </Route>
 

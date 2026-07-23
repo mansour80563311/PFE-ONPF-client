@@ -1,10 +1,14 @@
 import api from "../api/axios";
 
 import type {
-  PaginatedDemandes,
+  Demande,
   DemandeResponse,
   CreateDemandeRequest,
   UpdateDemandeRequest,
+  UpdateDemandeStatusRequest,
+  PaginatedDemandes,
+  HistoriqueStatutDemande,
+  HistoriqueDemandeResponse,
 } from "../types/demande";
 
 class DemandeService {
@@ -50,6 +54,29 @@ class DemandeService {
 
     return response.data;
   }
+
+  async updateStatus(
+    id: string,
+    data: UpdateDemandeStatusRequest
+  ): Promise<Demande> {
+    const response = await api.patch<DemandeResponse>(
+      `/demandes/${id}/status`,
+      data
+    );
+
+    return response.data.data;
+  }
+
+  async getHistory(
+  id: string
+): Promise<HistoriqueStatutDemande[]> {
+  const response =
+    await api.get<HistoriqueDemandeResponse>(
+      `/demandes/${id}/history`
+    );
+
+  return response.data.data;
+}
 
   async deleteDemande(id: string) {
     const response = await api.delete<{
