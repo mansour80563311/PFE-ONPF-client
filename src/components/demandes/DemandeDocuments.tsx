@@ -62,6 +62,8 @@ import {
   isDemandeTerminee,
 } from "../../utils/demande";
 
+import axios from "axios";
+
 interface Props {
   demandeId: string;
   demandeStatut: StatutDemande;
@@ -192,10 +194,33 @@ function DemandeDocuments({
       setUploadDialogOpen(false);
       setSelectedType("");
       setSelectedFile(null);
-    } catch {
-      toast.error(
-        "Erreur lors de l’ajout du document."
-      );
+        } catch (error) {
+        console.error(
+            "Erreur upload document :",
+            error
+        );
+
+        if (axios.isAxiosError(error)) {
+            const responseData = error.response?.data as
+            | {
+                message?: string;
+                errors?: Array<{
+                    message?: string;
+                }>;
+                }
+            | undefined;
+
+            const message =
+            responseData?.message ||
+            responseData?.errors?.[0]?.message ||
+            "Erreur lors de l’ajout du document.";
+
+            toast.error(message);
+        } else {
+            toast.error(
+            "Erreur lors de l’ajout du document."
+            );
+        }
     } finally {
       setUploading(false);
     }
