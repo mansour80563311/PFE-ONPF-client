@@ -29,6 +29,12 @@ import DemandeDetails from "../../components/demandes/DemandeDetails";
 import DemandeHistory from "../../components/demandes/DemandeHistory";
 import { useDemandeHistory } from "../../hooks/useDemandeHistory";
 
+import DemandeDocuments from "../../components/demandes/DemandeDocuments";
+
+import {
+  useDemandeDocuments,
+} from "../../hooks/useDemandeDocuments";
+
 
 import {
   StatutDemande,
@@ -52,6 +58,13 @@ function ViewDemandePage() {
     reloadHistory,
     } = useDemandeHistory(id!);
 
+  const {
+    documents,
+    loadingDocuments,
+    documentsError,
+    reloadDocuments,
+  } = useDemandeDocuments(id!);
+   
   const [dialogOpen, setDialogOpen] =
     useState(false);
 
@@ -265,16 +278,30 @@ const [motifRejet, setMotifRejet] =
           traitement est terminé.
         </Alert>
       )}
-      // details demande
+      
+      {/* Détails de la demande */}
       <DemandeDetails demande={demande} />
 
-        <Box sx={{ mt: 4 }}>
-        <DemandeHistory
-            historique={historique}
-            loading={loadingHistory}
-            error={historyError}
+      {/* Pièces justificatives */}
+      <Box sx={{ mt: 4 }}>
+        <DemandeDocuments
+          demandeId={demande.id}
+          demandeStatut={demande.statut}
+          documents={documents}
+          loading={loadingDocuments}
+          error={documentsError}
+          onReload={reloadDocuments}
         />
-        </Box>
+      </Box>
+
+      {/* Historique du traitement */}
+      <Box sx={{ mt: 4 }}>
+        <DemandeHistory
+          historique={historique}
+          loading={loadingHistory}
+          error={historyError}
+        />
+      </Box>
 
       {/* Boîte de confirmation */}
 
