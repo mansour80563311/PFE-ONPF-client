@@ -20,6 +20,7 @@ import JournalClotureListPage from "../pages/journaux-cloture/JournalClotureList
 import CreateJournalCloturePage from "../pages/journaux-cloture/CreateJournalCloturePage";
 import ViewJournalCloturePage from "../pages/journaux-cloture/ViewJournalCloturePage";
 
+
 function AppRoutes() {
   return (
     <BrowserRouter>
@@ -100,6 +101,24 @@ function AppRoutes() {
                   <ViewJournalCloturePage />
                 }
               />
+
+              <Route
+                  element={
+                    <RoleRoute
+                      roles={[
+                        ROLES.ADMIN,
+                        ROLES.AGENT,
+                        ROLES.RESPONSABLE,
+                      ]}
+                    />
+                  }
+                >
+                  <Route
+                    path="/dashboard"
+                    element={<DashboardPage />}
+                  />
+                </Route>
+
             </Route>
 
           </Route>

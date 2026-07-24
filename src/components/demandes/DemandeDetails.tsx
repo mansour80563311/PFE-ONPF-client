@@ -1,9 +1,10 @@
 import {
+  Alert,
+  Button,
   Chip,
   Grid,
   Paper,
   Typography,
-    Alert,
 } from "@mui/material";
 
 import type { Demande } from "../../types/demande";
@@ -15,7 +16,13 @@ import {
 
 import {
   formatDateTime,
+  formatDate,
 } from "../../utils/date";
+import {
+  Link,
+} from "react-router-dom";
+
+
 
 interface Props {
   demande: Demande;
@@ -217,6 +224,82 @@ function DemandeDetails({ demande }: Props) {
         </Grid>
 
       </Grid>
+
+
+      <Typography
+        variant="h6"
+        sx={{
+          mt: 5,
+          mb: 3,
+          fontWeight: 600,
+        }}
+      >
+        🔒 Clôture journalière
+      </Typography>
+
+      {demande.journalCloture ? (
+        <Alert severity="success">
+          <Typography
+            sx={{
+              fontWeight: 600,
+              mb: 1,
+            }}
+          >
+            Cette demande est clôturée.
+          </Typography>
+
+          <Typography variant="body2">
+            Journal :{" "}
+            <strong>
+              {demande.journalCloture.numero}
+            </strong>
+          </Typography>
+
+          <Typography variant="body2">
+            Journée clôturée :{" "}
+            {formatDate(
+              demande.journalCloture.dateJour
+            )}
+          </Typography>
+
+          <Typography variant="body2">
+            Clôture effectuée le :{" "}
+            {formatDateTime(
+              demande.journalCloture.dateCloture
+            )}
+          </Typography>
+
+          <Typography variant="body2">
+            Responsable :{" "}
+            {
+              demande.journalCloture
+                .responsable.prenom
+            }{" "}
+            {
+              demande.journalCloture
+                .responsable.nom
+            }
+          </Typography>
+
+          <Button
+            component={Link}
+            to={`/journaux-cloture/${demande.journalCloture.id}`}
+            variant="outlined"
+            size="small"
+            sx={{
+              mt: 2,
+            }}
+          >
+            Consulter le journal
+          </Button>
+        </Alert>
+      ) : (
+        <Alert severity="info">
+          Cette demande n’est pas encore rattachée
+          à un journal de clôture.
+        </Alert>
+      )}
+
 
       {/* ========================= */}
       {/* Observations */}

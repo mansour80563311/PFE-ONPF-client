@@ -31,6 +31,9 @@ export interface Demande {
 
   motifRejet?: string | null;
 
+  journalClotureId?: string | null;
+  journalCloture?: JournalClotureResume | null;
+
   createdAt: string;
   updatedAt: string;
 }
@@ -111,4 +114,22 @@ export interface HistoriqueDemandeResponse {
   success: boolean;
   message: string;
   data: HistoriqueStatutDemande[];
+}
+
+export interface ResponsableJournalCloture {
+  id: string;
+  nom: string;
+  prenom: string;
+  login: string;
+}
+
+export interface JournalClotureResume {
+  id: string;
+  numero: string;
+  dateJour: string;
+  dateCloture: string;
+  observations?: string | null;
+
+  responsableId: string;
+  responsable: ResponsableJournalCloture;
 }
