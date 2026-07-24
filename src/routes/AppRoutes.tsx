@@ -16,6 +16,9 @@ import CreateDemandePage from "../pages/demandes/CreateDemandePage";
 import UpdateDemandePage from "../pages/demandes/UpdateDemandePage";
 
 import ViewDemandePage from "../pages/demandes/ViewDemandePage";
+import JournalClotureListPage from "../pages/journaux-cloture/JournalClotureListPage";
+import CreateJournalCloturePage from "../pages/journaux-cloture/CreateJournalCloturePage";
+import ViewJournalCloturePage from "../pages/journaux-cloture/ViewJournalCloturePage";
 
 function AppRoutes() {
   return (
@@ -66,6 +69,36 @@ function AppRoutes() {
               <Route
                 path="/demandes/:id"
                 element={<ViewDemandePage />}
+              />
+            </Route>
+
+          <Route
+              element={
+                <RoleRoute
+                  roles={[
+                    ROLES.ADMIN,
+                    ROLES.RESPONSABLE,
+                  ]}
+                />
+              }
+            >
+              <Route
+                path="/journaux-cloture"
+                element={
+                  <JournalClotureListPage />
+                }
+              />
+              <Route
+                path="/journaux-cloture/create"
+                element={
+                  <CreateJournalCloturePage />
+                }
+              />
+              <Route
+                path="/journaux-cloture/:id"
+                element={
+                  <ViewJournalCloturePage />
+                }
               />
             </Route>
 

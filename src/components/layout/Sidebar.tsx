@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 import RoleGuard from "../common/RoleGuard";
 import { ROLES } from "../../utils/roles";
 
+
 function Sidebar() {
   const navigate = useNavigate();
 
@@ -44,6 +45,23 @@ function Sidebar() {
         >
           <ListItemText primary="Demandes" />
         </ListItemButton>
+        </RoleGuard>
+
+        <RoleGuard
+          roles={[
+            ROLES.ADMIN,
+            ROLES.RESPONSABLE,
+          ]}
+        >
+          <ListItemButton
+            onClick={() =>
+              navigate("/journaux-cloture")
+            }
+          >
+            <ListItemText
+              primary="Journaux de clôture"
+            />
+          </ListItemButton>
         </RoleGuard>
 
     </List>
