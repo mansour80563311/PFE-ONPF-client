@@ -1,113 +1,257 @@
-import { Button, Paper, TextField, Typography } from "@mui/material";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  IconButton,
+  InputAdornment,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 
-import { loginSchema, type LoginFormData } from "../../validations/auth.schema";
+import LoginRoundedIcon from "@mui/icons-material/LoginRounded";
+import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
+import VisibilityOffRoundedIcon from "@mui/icons-material/VisibilityOffRounded";
 
-import { useNavigate } from "react-router-dom";
-import { toast } from "react-toastify";
+import axios from "axios";
+
+import {
+  useState,
+} from "react";
+
+import {
+  useForm,
+} from "react-hook-form";
+
+import {
+  zodResolver,
+} from "@hookform/resolvers/zod";
+
+import {
+  useNavigate,
+} from "react-router-dom";
+
+import {
+  toast,
+} from "react-toastify";
 
 import authService from "../../services/auth.service";
 
-import { AxiosError } from "axios";
+import {
+  useAuth,
+} from "../../hooks/useAuth";
 
-import { useAuth } from "../../hooks/useAuth";
+import {
+  loginSchema,
+} from "../../validations/auth.schema";
+
+import type {
+  LoginFormData,
+} from "../../validations/auth.schema";
+
+interface ApiErrorResponse {
+  message?: string;
+}
 
 function LoginForm() {
-    const { login } = useAuth();
+  const navigate = useNavigate();
+
+  const {
+    login,
+  } = useAuth();
+
+  const [
+    showPassword,
+    setShowPassword,
+  ] = useState(false);
+
+  const [
+    authenticationError,
+    setAuthenticationError,
+  ] = useState<string | null>(null);
+
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: {
+      errors,
+      isSubmitting,
+    },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
+
+    defaultValues: {
+      login: "",
+      password: "",
+    },
   });
 
-const navigate = useNavigate();
+  const getErrorMessage = (
+    error: unknown
+  ): string => {
+    if (axios.isAxiosError(error)) {
+      const responseData =
+        error.response?.data as
+          | ApiErrorResponse
+          | undefined;
 
+      return (
+        responseData?.message ??
+        "Identifiant ou mot de passe incorrect."
+      );
+    }
 
-const onSubmit = async (data: LoginFormData) => {
+    return (
+      "Une erreur inattendue est survenue. " +
+      "Veuillez réessayer."
+    );
+  };
 
-  try {
+  const onSubmit = async (
+    data: LoginFormData
+  ) => {
+    try {
+      setAuthenticationError(null);
 
-    const response = await authService.login(data);
+      const response =
+        await authService.login(data);
 
-
-    login(
+      login(
         response.data.token,
         response.data.user
-    );
+      );
 
+      toast.success(
+        "Connexion réussie."
+      );
 
-    toast.success(
-      "Connexion réussie"
-    );
-
-
-    navigate("/dashboard");
-
-
-} catch (error) {
-  const axiosError = error as AxiosError<{
-    message: string;
-  }>;
-
-  toast.error(
-    axiosError.response?.data?.message ??
-    "Erreur de connexion"
-  );
-}
-
-};
+      navigate("/dashboard", {
+        replace: true,
+      });
+    } catch (error) {
+      setAuthenticationError(
+        getErrorMessage(error)
+      );
+    }
+  };
 
   return (
-    <Paper
-      elevation={4}
-      sx={{
-        width: 400,
-        padding: 4,
-      }}
+    <Box
+      component="form"
+      noValidate
+      onSubmit={handleSubmit(onSubmit)}
     >
-      <Typography
-        variant="h5"
-        align="center"
-        sx={{ mb: 3 }}
-      >
-        Connexion
-      </Typography>
+      <Stack spacing={2.5}>
+        {authenticationError && (
+          <Alert
+            severity="error"
+            variant="outlined"
+          >
+            {authenticationError}
+          </Alert>
+        )}
 
-      <form onSubmit={handleSubmit(onSubmit)}>
         <TextField
-          label="Login"
+          label="Identifiant"
+          placeholder="Saisissez votre identifiant"
           fullWidth
-          margin="normal"
+          autoFocus
+          autoComplete="username"
+          disabled={isSubmitting}
+          error={Boolean(errors.login)}
+          helperText={
+            errors.login?.message
+          }
           {...register("login")}
-          error={!!errors.login}
-          helperText={errors.login?.message}
         />
 
         <TextField
           label="Mot de passe"
-          type="password"
+          placeholder="Saisissez votre mot de passe"
+          type={
+            showPassword
+              ? "text"
+              : "password"
+          }
           fullWidth
-          margin="normal"
+          autoComplete="current-password"
+          disabled={isSubmitting}
+          error={Boolean(
+            errors.password
+          )}
+          helperText={
+            errors.password?.message
+          }
           {...register("password")}
-          error={!!errors.password}
-          helperText={errors.password?.message}
+          slotProps={{
+            input: {
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    edge="end"
+                    type="button"
+                    aria-label={
+                      showPassword
+                        ? "Masquer le mot de passe"
+                        : "Afficher le mot de passe"
+                    }
+                    onClick={() =>
+                      setShowPassword(
+                        (currentValue) =>
+                          !currentValue
+                      )
+                    }
+                  >
+                    {showPassword ? (
+                      <VisibilityOffRoundedIcon />
+                    ) : (
+                      <VisibilityRoundedIcon />
+                    )}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            },
+          }}
         />
 
         <Button
           type="submit"
           fullWidth
           variant="contained"
+          size="large"
+          disabled={isSubmitting}
+          startIcon={
+            isSubmitting ? (
+              <CircularProgress
+                size={20}
+                color="inherit"
+              />
+            ) : (
+              <LoginRoundedIcon />
+            )
+          }
           sx={{
-            mt: 3,
+            minHeight: 50,
+            mt: 1,
           }}
         >
-          Se connecter
+          {isSubmitting
+            ? "Connexion en cours..."
+            : "Se connecter"}
         </Button>
-      </form>
-    </Paper>
+
+        <Typography
+          variant="caption"
+          align="center"
+          color="text.secondary"
+        >
+          L’accès à cette application est
+          strictement réservé au personnel
+          habilité de l’ONPF.
+        </Typography>
+      </Stack>
+    </Box>
   );
 }
 

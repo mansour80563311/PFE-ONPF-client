@@ -1,6 +1,6 @@
 import { CircularProgress, Button } from "@mui/material";
 
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import PageHeader from "../../components/common/PageHeader";
 import SearchBar from "../../components/common/SearchBar";
@@ -8,6 +8,8 @@ import UserTable from "../../components/users/UserTable";
 
 import { useUsers } from "../../hooks/useUsers";
 import PaginationBar from "../../components/common/PaginationBar";
+import GroupsRoundedIcon from "@mui/icons-material/GroupsRounded";
+import PersonAddRoundedIcon from "@mui/icons-material/PersonAddRounded";
 
 function UserListPage() {
 
@@ -22,6 +24,7 @@ const {
   totalPages,
     loadUsers,
 } = useUsers();
+const navigate = useNavigate();
 
   if (loading) {
     return <CircularProgress />;
@@ -29,18 +32,22 @@ const {
 
   return (
     <>
-      <PageHeader
-        title="Utilisateurs"
-        action={
-          <Button
-            component={Link}
-            to="/users/create"
-            variant="contained"
-          >
-            Nouvel utilisateur
-          </Button>
-        }
-      />
+        <PageHeader
+          title="Gestion des utilisateurs"
+          subtitle="Créez et administrez les comptes ainsi que leurs rôles d’accès."
+          icon={<GroupsRoundedIcon />}
+          actions={
+            <Button
+              variant="contained"
+              startIcon={<PersonAddRoundedIcon />}
+              onClick={() =>
+                navigate("/users/create")
+              }
+            >
+              Nouvel utilisateur
+            </Button>
+          }
+        />
 
       <SearchBar
         value={search}

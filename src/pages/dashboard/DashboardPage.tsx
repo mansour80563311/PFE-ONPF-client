@@ -47,6 +47,8 @@ import {
   getStatusLabel,
 } from "../../utils/demande";
 
+import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
+
 function DashboardPage() {
   const navigate = useNavigate();
 
@@ -90,15 +92,9 @@ function DashboardPage() {
     <>
       <PageHeader
         title="Tableau de bord"
+        subtitle="Vue générale de l’activité et du traitement des inscriptions foncières."
+        icon={<DashboardRoundedIcon />}
       />
-
-      <Typography
-        color="text.secondary"
-        sx={{ mb: 4 }}
-      >
-        Vue générale de l’activité des
-        inscriptions foncières.
-      </Typography>
 
       {/* Cartes statistiques */}
 

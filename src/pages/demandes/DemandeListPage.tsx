@@ -1,6 +1,6 @@
 import { CircularProgress, Button } from "@mui/material";
 
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import PageHeader from "../../components/common/PageHeader";
 import SearchBar from "../../components/common/SearchBar";
@@ -9,6 +9,8 @@ import PaginationBar from "../../components/common/PaginationBar";
 import DemandeTable from "../../components/demandes/DemandeTable";
 
 import { useDemandes } from "../../hooks/useDemandes";
+import AssignmentRoundedIcon from "@mui/icons-material/AssignmentRounded";
+import AddRoundedIcon from "@mui/icons-material/AddRounded";
 
 function DemandeListPage() {
   const {
@@ -22,6 +24,7 @@ function DemandeListPage() {
     totalPages,
     loadDemandes,
   } = useDemandes();
+  const navigate = useNavigate();
 
   if (loading) {
     return <CircularProgress />;
@@ -29,18 +32,22 @@ function DemandeListPage() {
 
   return (
     <>
-      <PageHeader
-        title="Demandes d'inscription"
-        action={
-          <Button
-            component={Link}
-            to="/demandes/create"
-            variant="contained"
-          >
-            Nouvelle demande
-          </Button>
-        }
-      />
+        <PageHeader
+          title="Demandes d’inscription"
+          subtitle="Suivez le traitement des demandes et consultez leur état d’avancement."
+          icon={<AssignmentRoundedIcon />}
+          actions={
+            <Button
+              variant="contained"
+              startIcon={<AddRoundedIcon />}
+              onClick={() =>
+                navigate("/demandes/create")
+              }
+            >
+              Nouvelle demande
+            </Button>
+          }
+        />
 
       <SearchBar
         value={search}

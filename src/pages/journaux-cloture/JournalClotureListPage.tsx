@@ -18,6 +18,8 @@ import JournalClotureTable from "../../components/journaux-cloture/JournalClotur
 import {
   useJournauxCloture,
 } from "../../hooks/useJournauxCloture";
+import LockClockRoundedIcon from "@mui/icons-material/LockClockRounded";
+
 
 function JournalClotureListPage() {
   const navigate = useNavigate();
@@ -49,29 +51,24 @@ function JournalClotureListPage() {
 
   return (
     <>
-      <PageHeader
+        <PageHeader
         title="Journaux de clôture"
-      />
-
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "flex-end",
-          mb: 3,
-        }}
-      >
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() =>
-            navigate(
-              "/journaux-cloture/create"
-            )
-          }
-        >
-          Nouvelle clôture
-        </Button>
-      </Box>
+        subtitle="Consultez les clôtures journalières et les demandes qui leur sont rattachées."
+        icon={<LockClockRoundedIcon />}
+        actions={
+            <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() =>
+                navigate(
+                "/journaux-cloture/create"
+                )
+            }
+            >
+            Nouvelle clôture
+            </Button>
+        }
+        />
 
       <TextField
         fullWidth
