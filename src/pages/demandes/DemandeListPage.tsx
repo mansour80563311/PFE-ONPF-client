@@ -12,6 +12,12 @@ import { useDemandes } from "../../hooks/useDemandes";
 import AssignmentRoundedIcon from "@mui/icons-material/AssignmentRounded";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 
+import { useAuth } from "../../hooks/useAuth";
+
+import {
+  ROLES,
+} from "../../utils/roles";
+
 function DemandeListPage() {
   const {
     demandes,
@@ -24,7 +30,17 @@ function DemandeListPage() {
     totalPages,
     loadDemandes,
   } = useDemandes();
+
   const navigate = useNavigate();
+
+  const { user } = useAuth();
+
+  const canCreateDemande =
+    user?.role === ROLES.ADMIN ||
+    user?.role === ROLES.AGENT;
+
+  const isResponsable =
+    user?.role === ROLES.RESPONSABLE;
 
   if (loading) {
     return <CircularProgress />;
@@ -32,11 +48,20 @@ function DemandeListPage() {
 
   return (
     <>
-        <PageHeader
-          title="Demandes d’inscription"
-          subtitle="Suivez le traitement des demandes et consultez leur état d’avancement."
-          icon={<AssignmentRoundedIcon />}
-          actions={
+      <PageHeader
+        title={
+          isResponsable
+            ? "Demandes à traiter"
+            : "Demandes d’inscription"
+        }
+        subtitle={
+          isResponsable
+            ? "Consultez les demandes transmises afin de vérifier leurs informations et leurs pièces justificatives."
+            : "Suivez le traitement des demandes et consultez leur état d’avancement."
+        }
+        icon={<AssignmentRoundedIcon />}
+        actions={
+          canCreateDemande ? (
             <Button
               variant="contained"
               startIcon={<AddRoundedIcon />}
@@ -46,9 +71,9 @@ function DemandeListPage() {
             >
               Nouvelle demande
             </Button>
-          }
-        />
-
+          ) : undefined
+        }
+      />
       <SearchBar
         value={search}
         onChange={setSearch}

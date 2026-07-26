@@ -12,38 +12,74 @@ import {
   TextField,
 } from "@mui/material";
 
-import PlayArrowIcon from "@mui/icons-material/PlayArrow";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import CancelIcon from "@mui/icons-material/Cancel";
+import AssignmentRoundedIcon from "@mui/icons-material/AssignmentRounded";
+import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
+import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+import CancelRoundedIcon from "@mui/icons-material/CancelRounded";
 
-import { useState } from "react";
-import { useParams } from "react-router-dom";
-import { toast } from "react-toastify";
+import axios from "axios";
+
+import {
+  useState,
+} from "react";
+
+import {
+  useNavigate,
+  useParams,
+} from "react-router-dom";
+
+import {
+  toast,
+} from "react-toastify";
 
 import PageHeader from "../../components/common/PageHeader";
-
-import { useDemande } from "../../hooks/useDemande";
-import demandeService from "../../services/demande.service";
-
 import DemandeDetails from "../../components/demandes/DemandeDetails";
-import DemandeHistory from "../../components/demandes/DemandeHistory";
-import { useDemandeHistory } from "../../hooks/useDemandeHistory";
-
 import DemandeDocuments from "../../components/demandes/DemandeDocuments";
+import DemandeHistory from "../../components/demandes/DemandeHistory";
+
+import {
+  useAuth,
+} from "../../hooks/useAuth";
+
+import {
+  useDemande,
+} from "../../hooks/useDemande";
+
+import {
+  useDemandeHistory,
+} from "../../hooks/useDemandeHistory";
 
 import {
   useDemandeDocuments,
 } from "../../hooks/useDemandeDocuments";
 
+import demandeService from "../../services/demande.service";
 
 import {
   StatutDemande,
 } from "../../types/demande";
 
+import {
+  ROLES,
+} from "../../utils/roles";
+
+interface ApiErrorResponse {
+  message?: string;
+  errors?: Array<{
+    message?: string;
+  }>;
+}
+
 function ViewDemandePage() {
+  const navigate = useNavigate();
+
   const { id } = useParams<{
     id: string;
   }>();
+
+  const {
+    user,
+  } = useAuth();
 
   const {
     demande,
@@ -51,12 +87,12 @@ function ViewDemandePage() {
     reload,
   } = useDemande(id!);
 
- const {
+  const {
     historique,
     loadingHistory,
     historyError,
     reloadHistory,
-    } = useDemandeHistory(id!);
+  } = useDemandeHistory(id!);
 
   const {
     documents,
@@ -64,18 +100,50 @@ function ViewDemandePage() {
     documentsError,
     reloadDocuments,
   } = useDemandeDocuments(id!);
-   
-  const [dialogOpen, setDialogOpen] =
-    useState(false);
 
-  const [nextStatus, setNextStatus] =
-    useState<StatutDemande | null>(null);
+  const [
+    dialogOpen,
+    setDialogOpen,
+  ] = useState(false);
 
-  const [updating, setUpdating] =
-    useState(false);
+  const [
+    nextStatus,
+    setNextStatus,
+  ] = useState<StatutDemande | null>(
+    null
+  );
 
-const [motifRejet, setMotifRejet] =
-  useState("");
+  const [
+    updating,
+    setUpdating,
+  ] = useState(false);
+
+  const [
+    motifRejet,
+    setMotifRejet,
+  ] = useState("");
+
+  const getErrorMessage = (
+    error: unknown
+  ): string => {
+    if (axios.isAxiosError(error)) {
+      const responseData =
+        error.response?.data as
+          | ApiErrorResponse
+          | undefined;
+
+      return (
+        responseData?.errors?.[0]
+          ?.message ??
+        responseData?.message ??
+        "Erreur lors de la mise à jour du statut."
+      );
+    }
+
+    return (
+      "Une erreur inattendue est survenue."
+    );
+  };
 
   const openStatusDialog = (
     statut: StatutDemande
@@ -86,90 +154,128 @@ const [motifRejet, setMotifRejet] =
   };
 
   const closeStatusDialog = () => {
-    if (updating) return;
+    if (updating) {
+      return;
+    }
 
     setDialogOpen(false);
     setNextStatus(null);
     setMotifRejet("");
   };
 
-  const getConfirmationMessage = () => {
-    switch (nextStatus) {
-      case StatutDemande.EN_COURS:
-        return "Voulez-vous commencer le traitement de cette demande ?";
+  const getConfirmationMessage =
+    (): string => {
+      switch (nextStatus) {
+        case StatutDemande.EN_COURS:
+          return (
+            "Voulez-vous transmettre cette demande au responsable ? " +
+            "Après transmission, elle ne pourra plus être modifiée par l’agent."
+          );
 
-      case StatutDemande.VALIDEE:
-        return "Voulez-vous valider définitivement cette demande ? Elle ne pourra plus être modifiée ni supprimée.";
+        case StatutDemande.VALIDEE:
+          return (
+            "Voulez-vous valider définitivement cette demande ? " +
+            "Tous les documents obligatoires doivent être conformes."
+          );
 
-      case StatutDemande.REJETEE:
-        return "Voulez-vous rejeter définitivement cette demande ?";
+        case StatutDemande.REJETEE:
+          return (
+            "Voulez-vous rejeter définitivement cette demande ? " +
+            "Le motif du rejet sera conservé dans l’historique."
+          );
 
-      default:
-        return "";
-    }
-  };
+        default:
+          return "";
+      }
+    };
 
-  const getConfirmationButtonLabel = () => {
-    switch (nextStatus) {
-      case StatutDemande.EN_COURS:
-        return "Mettre en cours";
+  const getConfirmationButtonLabel =
+    (): string => {
+      switch (nextStatus) {
+        case StatutDemande.EN_COURS:
+          return "Transmettre";
 
-      case StatutDemande.VALIDEE:
-        return "Valider";
+        case StatutDemande.VALIDEE:
+          return "Valider";
 
-      case StatutDemande.REJETEE:
-        return "Rejeter";
+        case StatutDemande.REJETEE:
+          return "Rejeter";
 
-      default:
-        return "Confirmer";
-    }
-  };
+        default:
+          return "Confirmer";
+      }
+    };
 
-    const handleConfirmStatus = async () => {
-    if (!id || !nextStatus) return;
+  const handleConfirmStatus =
+    async () => {
+      if (!id || !nextStatus) {
+        return;
+      }
 
-    if (
-        nextStatus === StatutDemande.REJETEE &&
+      if (
+        nextStatus ===
+          StatutDemande.REJETEE &&
         motifRejet.trim().length < 5
-    ) {
+      ) {
         toast.error(
-        "Le motif de rejet doit contenir au moins 5 caractères."
+          "Le motif de rejet doit contenir au moins 5 caractères."
         );
 
         return;
-    }
+      }
 
-    try {
+      try {
         setUpdating(true);
 
-        await demandeService.updateStatus(id, {
-        statut: nextStatus,
+        await demandeService.updateStatus(
+          id,
+          {
+            statut: nextStatus,
 
-        ...(nextStatus ===
-            StatutDemande.REJETEE && {
-            motifRejet: motifRejet.trim(),
-        }),
-        });
-
-        await reload();
-        await reloadHistory();
-
-        toast.success(
-        nextStatus === StatutDemande.REJETEE
-            ? "La demande a été rejetée."
-            : "Statut de la demande mis à jour."
+            ...(nextStatus ===
+              StatutDemande.REJETEE && {
+              motifRejet:
+                motifRejet.trim(),
+            }),
+          }
         );
+
+        await Promise.all([
+          reload(),
+          reloadHistory(),
+          reloadDocuments(),
+        ]);
+
+        if (
+          nextStatus ===
+          StatutDemande.EN_COURS
+        ) {
+          toast.success(
+            "La demande a été transmise au responsable."
+          );
+        } else if (
+          nextStatus ===
+          StatutDemande.VALIDEE
+        ) {
+          toast.success(
+            "La demande a été validée."
+          );
+        } else {
+          toast.success(
+            "La demande a été rejetée."
+          );
+        }
 
         setDialogOpen(false);
         setNextStatus(null);
         setMotifRejet("");
-    } catch {
+      } catch (error) {
         toast.error(
-        "Erreur lors de la mise à jour du statut."
+          getErrorMessage(error)
         );
-    } finally {
+      } finally {
         setUpdating(false);
-    }
+      }
     };
 
   if (loading) {
@@ -178,7 +284,7 @@ const [motifRejet, setMotifRejet] =
         sx={{
           display: "flex",
           justifyContent: "center",
-          py: 5,
+          py: 6,
         }}
       >
         <CircularProgress />
@@ -194,44 +300,72 @@ const [motifRejet, setMotifRejet] =
     );
   }
 
-  return (
-    <>
-      <PageHeader
-        title={`Demande ${demande.numero}`}
-      />
+  const isAdmin =
+    user?.role === ROLES.ADMIN;
 
-      {/* Actions selon le statut */}
+  const isAgent =
+    user?.role === ROLES.AGENT;
 
+  const isResponsable =
+    user?.role === ROLES.RESPONSABLE;
+
+  const isDemandeOwner =
+    user?.id === demande.utilisateur.id;
+
+  const canTransmit =
+    demande.statut ===
+      StatutDemande.EN_ATTENTE &&
+    (
+      isAdmin ||
+      (
+        isAgent &&
+        isDemandeOwner
+      )
+    );
+
+  const canDecide =
+    demande.statut ===
+      StatutDemande.EN_COURS &&
+    (
+      isAdmin ||
+      isResponsable
+    );
+
+  const statusActions =
+    canTransmit || canDecide ? (
       <Stack
         direction={{
           xs: "column",
           sm: "row",
         }}
-        spacing={2}
-        sx={{ mb: 3 }}
+        spacing={1.5}
       >
-        {demande.statut ===
-          StatutDemande.EN_ATTENTE && (
+        {canTransmit && (
           <Button
             variant="contained"
-            startIcon={<PlayArrowIcon />}
+            startIcon={
+              <PlayArrowRoundedIcon />
+            }
+            disabled={updating}
             onClick={() =>
               openStatusDialog(
                 StatutDemande.EN_COURS
               )
             }
           >
-            Mettre en cours
+            Transmettre au responsable
           </Button>
         )}
 
-        {demande.statut ===
-          StatutDemande.EN_COURS && (
+        {canDecide && (
           <>
             <Button
               variant="contained"
               color="success"
-              startIcon={<CheckCircleIcon />}
+              startIcon={
+                <CheckCircleRoundedIcon />
+              }
+              disabled={updating}
               onClick={() =>
                 openStatusDialog(
                   StatutDemande.VALIDEE
@@ -244,7 +378,10 @@ const [motifRejet, setMotifRejet] =
             <Button
               variant="contained"
               color="error"
-              startIcon={<CancelIcon />}
+              startIcon={
+                <CancelRoundedIcon />
+              }
+              disabled={updating}
               onClick={() =>
                 openStatusDialog(
                   StatutDemande.REJETEE
@@ -256,37 +393,110 @@ const [motifRejet, setMotifRejet] =
           </>
         )}
       </Stack>
+    ) : undefined;
+
+  return (
+    <>
+      <PageHeader
+        title={`Demande ${demande.numero}`}
+        subtitle="Consultez les informations, les pièces justificatives et l’historique du traitement."
+        icon={<AssignmentRoundedIcon />}
+        actions={statusActions}
+        breadcrumbs={[
+          {
+            label: "Demandes",
+            onClick: () =>
+              navigate("/demandes"),
+          },
+          {
+            label: demande.numero,
+          },
+        ]}
+      />
+
+      {/* Messages selon le statut et le rôle */}
+
+      {demande.statut ===
+        StatutDemande.EN_ATTENTE &&
+        isAgent &&
+        isDemandeOwner && (
+          <Alert
+            severity="warning"
+            sx={{ mb: 3 }}
+          >
+            Cette demande est encore en
+            préparation. Vérifiez les
+            informations et ajoutez les
+            pièces justificatives avant de
+            la transmettre au responsable.
+          </Alert>
+        )}
+
+      {demande.statut ===
+        StatutDemande.EN_COURS &&
+        isAgent && (
+          <Alert
+            severity="info"
+            sx={{ mb: 3 }}
+          >
+            Cette demande a été transmise.
+            Elle est maintenant en cours de
+            vérification par le responsable.
+          </Alert>
+        )}
+
+      {demande.statut ===
+        StatutDemande.EN_COURS &&
+        isResponsable && (
+          <Alert
+            severity="info"
+            sx={{ mb: 3 }}
+          >
+            Vérifiez les informations et la
+            conformité de toutes les pièces
+            avant de valider ou de rejeter
+            cette demande.
+          </Alert>
+        )}
 
       {demande.statut ===
         StatutDemande.VALIDEE && (
-        <Alert
-          severity="success"
-          sx={{ mb: 3 }}
-        >
-          Cette demande est validée et son
-          traitement est terminé.
-        </Alert>
-      )}
+          <Alert
+            severity="success"
+            sx={{ mb: 3 }}
+          >
+            Cette demande est validée. Son
+            traitement est terminé et ses
+            données sont verrouillées.
+          </Alert>
+        )}
 
       {demande.statut ===
         StatutDemande.REJETEE && (
-        <Alert
-          severity="error"
-          sx={{ mb: 3 }}
-        >
-          Cette demande a été rejetée et son
-          traitement est terminé.
-        </Alert>
-      )}
-      
-      {/* Détails de la demande */}
-      <DemandeDetails demande={demande} />
+          <Alert
+            severity="error"
+            sx={{ mb: 3 }}
+          >
+            Cette demande a été rejetée. Son
+            traitement est terminé et ses
+            données sont verrouillées.
+          </Alert>
+        )}
+
+      {/* Informations de la demande */}
+
+      <DemandeDetails
+        demande={demande}
+      />
 
       {/* Pièces justificatives */}
+
       <Box sx={{ mt: 4 }}>
         <DemandeDocuments
           demandeId={demande.id}
-          demandeStatut={demande.statut}
+          demandeStatut={
+            demande.statut
+          }
           documents={documents}
           loading={loadingDocuments}
           error={documentsError}
@@ -294,7 +504,8 @@ const [motifRejet, setMotifRejet] =
         />
       </Box>
 
-      {/* Historique du traitement */}
+      {/* Historique */}
+
       <Box sx={{ mt: 4 }}>
         <DemandeHistory
           historique={historique}
@@ -303,56 +514,77 @@ const [motifRejet, setMotifRejet] =
         />
       </Box>
 
-      {/* Boîte de confirmation */}
+      {/* Confirmation du changement de statut */}
 
       <Dialog
         open={dialogOpen}
         onClose={closeStatusDialog}
+        fullWidth
+        maxWidth="sm"
       >
         <DialogTitle>
-          Confirmation
+          {nextStatus ===
+          StatutDemande.EN_COURS
+            ? "Transmettre la demande"
+            : nextStatus ===
+                StatutDemande.VALIDEE
+              ? "Valider la demande"
+              : nextStatus ===
+                  StatutDemande.REJETEE
+                ? "Rejeter la demande"
+                : "Confirmation"}
         </DialogTitle>
 
         <DialogContent>
-        <DialogContentText sx={{ mb: 2 }}>
+          <DialogContentText
+            sx={{ mb: 2 }}
+          >
             {getConfirmationMessage()}
-        </DialogContentText>
+          </DialogContentText>
 
-        {nextStatus === StatutDemande.REJETEE && (
+          {nextStatus ===
+            StatutDemande.REJETEE && (
             <TextField
-            autoFocus
-            fullWidth
-            required
-            multiline
-            minRows={4}
-            label="Motif du rejet"
-            placeholder="Indiquez clairement pourquoi cette demande est rejetée..."
-            value={motifRejet}
-            onChange={(event) =>
-                setMotifRejet(event.target.value)
-            }
-            error={
+              autoFocus
+              fullWidth
+              required
+              multiline
+              minRows={4}
+              label="Motif du rejet"
+              placeholder="Indiquez clairement pourquoi cette demande est rejetée..."
+              value={motifRejet}
+              disabled={updating}
+              onChange={(event) =>
+                setMotifRejet(
+                  event.target.value
+                )
+              }
+              error={
                 motifRejet.length > 0 &&
-                motifRejet.trim().length < 5
-            }
-            helperText={
+                motifRejet.trim()
+                  .length < 5
+              }
+              helperText={
                 motifRejet.length > 0 &&
-                motifRejet.trim().length < 5
-                ? "Le motif doit contenir au moins 5 caractères."
-                : `${motifRejet.length}/500 caractères`
-            }
-            slotProps={{
+                motifRejet.trim()
+                  .length < 5
+                  ? "Le motif doit contenir au moins 5 caractères."
+                  : `${motifRejet.length}/500 caractères`
+              }
+              slotProps={{
                 htmlInput: {
-                maxLength: 500,
+                  maxLength: 500,
                 },
-            }}
+              }}
             />
-        )}
+          )}
         </DialogContent>
 
         <DialogActions>
           <Button
-            onClick={closeStatusDialog}
+            onClick={
+              closeStatusDialog
+            }
             disabled={updating}
           >
             Annuler
@@ -369,14 +601,18 @@ const [motifRejet, setMotifRejet] =
                   ? "error"
                   : "primary"
             }
-            onClick={handleConfirmStatus}
             disabled={
-                updating ||
-                (
-                    nextStatus === StatutDemande.REJETEE &&
-                    motifRejet.trim().length < 5
-                )
-                }
+              updating ||
+              (
+                nextStatus ===
+                  StatutDemande.REJETEE &&
+                motifRejet.trim()
+                  .length < 5
+              )
+            }
+            onClick={
+              handleConfirmStatus
+            }
           >
             {updating
               ? "Traitement..."

@@ -29,8 +29,15 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 
-import { useState } from "react";
-import { toast } from "react-toastify";
+import axios from "axios";
+
+import {
+  useState,
+} from "react";
+
+import {
+  toast,
+} from "react-toastify";
 
 import demandeDocumentService from "../../services/demande-document.service";
 
@@ -39,13 +46,13 @@ import {
   TypeDocument,
 } from "../../types/demande-document";
 
+import {
+  StatutDemande,
+} from "../../types/demande";
+
 import type {
   DemandeDocument,
 } from "../../types/demande-document";
-
-import type {
-  StatutDemande,
-} from "../../types/demande";
 
 import {
   formatFileSize,
@@ -62,7 +69,13 @@ import {
   isDemandeTerminee,
 } from "../../utils/demande";
 
-import axios from "axios";
+import {
+  useAuth,
+} from "../../hooks/useAuth";
+
+import {
+  ROLES,
+} from "../../utils/roles";
 
 interface Props {
   demandeId: string;
@@ -73,12 +86,40 @@ interface Props {
   onReload: () => Promise<void>;
 }
 
+interface ApiErrorResponse {
+  message?: string;
+
+  errors?: Array<{
+    message?: string;
+  }>;
+}
+
 const DOCUMENT_TYPES: TypeDocument[] = [
   TypeDocument.CIN,
   TypeDocument.PASSEPORT,
   TypeDocument.CONTRAT,
   TypeDocument.PROCURATION,
 ];
+
+function getErrorMessage(
+  error: unknown,
+  fallbackMessage: string
+): string {
+  if (axios.isAxiosError(error)) {
+    const responseData =
+      error.response?.data as
+        | ApiErrorResponse
+        | undefined;
+
+    return (
+      responseData?.errors?.[0]?.message ??
+      responseData?.message ??
+      fallbackMessage
+    );
+  }
+
+  return fallbackMessage;
+}
 
 function DemandeDocuments({
   demandeId,
@@ -88,57 +129,136 @@ function DemandeDocuments({
   error,
   onReload,
 }: Props) {
+  const {
+    user,
+  } = useAuth();
+
+  const isAdmin =
+    user?.role === ROLES.ADMIN;
+
+  const isAgent =
+    user?.role === ROLES.AGENT;
+
+  const isResponsable =
+    user?.role === ROLES.RESPONSABLE;
+
   const demandeTerminee =
     isDemandeTerminee(demandeStatut);
 
-  const [uploadDialogOpen, setUploadDialogOpen] =
-    useState(false);
+  /*
+   * L’Agent ou l’Administrateur peut
+   * ajouter des pièces uniquement tant
+   * que la demande est EN_ATTENTE.
+   */
+  const canUploadDocuments =
+    demandeStatut ===
+      StatutDemande.EN_ATTENTE &&
+    (
+      isAdmin ||
+      isAgent
+    );
 
-  const [selectedType, setSelectedType] =
-    useState<TypeDocument | "">("");
+  /*
+   * Le Responsable ou l’Administrateur
+   * peut vérifier les pièces uniquement
+   * lorsque la demande est EN_COURS.
+   */
+  const canVerifyDocuments =
+    demandeStatut ===
+      StatutDemande.EN_COURS &&
+    (
+      isAdmin ||
+      isResponsable
+    );
 
-  const [selectedFile, setSelectedFile] =
-    useState<File | null>(null);
+  /*
+   * L’Agent ou l’Administrateur peut
+   * supprimer une pièce uniquement avant
+   * la transmission de la demande.
+   */
+  const canDeleteDocuments =
+    demandeStatut ===
+      StatutDemande.EN_ATTENTE &&
+    (
+      isAdmin ||
+      isAgent
+    );
 
-  const [uploading, setUploading] =
-    useState(false);
+  const [
+    uploadDialogOpen,
+    setUploadDialogOpen,
+  ] = useState(false);
 
-  const [statusDialogOpen, setStatusDialogOpen] =
-    useState(false);
+  const [
+    selectedType,
+    setSelectedType,
+  ] = useState<TypeDocument | "">("");
 
-  const [selectedDocument, setSelectedDocument] =
-    useState<DemandeDocument | null>(null);
+  const [
+    selectedFile,
+    setSelectedFile,
+  ] = useState<File | null>(null);
 
-  const [nextDocumentStatus, setNextDocumentStatus] =
-    useState<StatutDocument | null>(null);
+  const [
+    uploading,
+    setUploading,
+  ] = useState(false);
+
+  const [
+    statusDialogOpen,
+    setStatusDialogOpen,
+  ] = useState(false);
+
+  const [
+    selectedDocument,
+    setSelectedDocument,
+  ] = useState<DemandeDocument | null>(
+    null
+  );
+
+  const [
+    nextDocumentStatus,
+    setNextDocumentStatus,
+  ] = useState<StatutDocument | null>(
+    null
+  );
 
   const [
     motifNonConformite,
     setMotifNonConformite,
   ] = useState("");
 
-  const [updatingStatus, setUpdatingStatus] =
-    useState(false);
+  const [
+    updatingStatus,
+    setUpdatingStatus,
+  ] = useState(false);
 
-  const [deleteDialogOpen, setDeleteDialogOpen] =
-    useState(false);
+  const [
+    deleteDialogOpen,
+    setDeleteDialogOpen,
+  ] = useState(false);
 
-  const [deleting, setDeleting] =
-    useState(false);
+  const [
+    deleting,
+    setDeleting,
+  ] = useState(false);
 
   const identityDocumentExists =
     documents.some(
       (documentItem) =>
-        documentItem.type === TypeDocument.CIN ||
-        documentItem.type === TypeDocument.PASSEPORT
+        documentItem.type ===
+          TypeDocument.CIN ||
+        documentItem.type ===
+          TypeDocument.PASSEPORT
     );
 
-  const availableTypes = DOCUMENT_TYPES.filter(
-    (type) => {
-      const sameTypeExists = documents.some(
-        (documentItem) =>
-          documentItem.type === type
-      );
+  const availableTypes =
+    DOCUMENT_TYPES.filter((type) => {
+      const sameTypeExists =
+        documents.some(
+          (documentItem) =>
+            documentItem.type === type
+        );
 
       if (sameTypeExists) {
         return false;
@@ -156,19 +276,43 @@ function DemandeDocuments({
       }
 
       return true;
-    }
-  );
+    });
 
   const closeUploadDialog = () => {
-    if (uploading) return;
+    if (uploading) {
+      return;
+    }
 
     setUploadDialogOpen(false);
     setSelectedType("");
     setSelectedFile(null);
   };
 
+  const handleOpenUploadDialog = () => {
+    if (!canUploadDocuments) {
+      toast.error(
+        "Les documents peuvent uniquement être ajoutés par l’agent avant la transmission de la demande."
+      );
+
+      return;
+    }
+
+    setUploadDialogOpen(true);
+  };
+
   const handleUpload = async () => {
-    if (!selectedType || !selectedFile) {
+    if (!canUploadDocuments) {
+      toast.error(
+        "Vous n’êtes pas autorisé à ajouter un document à cette demande."
+      );
+
+      return;
+    }
+
+    if (
+      !selectedType ||
+      !selectedFile
+    ) {
       toast.error(
         "Sélectionnez un type et un fichier."
       );
@@ -179,11 +323,12 @@ function DemandeDocuments({
     try {
       setUploading(true);
 
-      await demandeDocumentService.uploadDocument(
-        demandeId,
-        selectedType,
-        selectedFile
-      );
+      await demandeDocumentService
+        .uploadDocument(
+          demandeId,
+          selectedType,
+          selectedFile
+        );
 
       await onReload();
 
@@ -194,33 +339,18 @@ function DemandeDocuments({
       setUploadDialogOpen(false);
       setSelectedType("");
       setSelectedFile(null);
-        } catch (error) {
-        console.error(
-            "Erreur upload document :",
-            error
-        );
+    } catch (uploadError) {
+      console.error(
+        "Erreur upload document :",
+        uploadError
+      );
 
-        if (axios.isAxiosError(error)) {
-            const responseData = error.response?.data as
-            | {
-                message?: string;
-                errors?: Array<{
-                    message?: string;
-                }>;
-                }
-            | undefined;
-
-            const message =
-            responseData?.message ||
-            responseData?.errors?.[0]?.message ||
-            "Erreur lors de l’ajout du document.";
-
-            toast.error(message);
-        } else {
-            toast.error(
-            "Erreur lors de l’ajout du document."
-            );
-        }
+      toast.error(
+        getErrorMessage(
+          uploadError,
+          "Erreur lors de l’ajout du document."
+        )
+      );
     } finally {
       setUploading(false);
     }
@@ -231,26 +361,38 @@ function DemandeDocuments({
   ) => {
     try {
       const blob =
-        await demandeDocumentService.downloadDocument(
-          demandeId,
-          documentItem.id
-        );
+        await demandeDocumentService
+          .downloadDocument(
+            demandeId,
+            documentItem.id
+          );
 
       const url =
         window.URL.createObjectURL(blob);
 
       const link =
-        window.document.createElement("a");
+        window.document.createElement(
+          "a"
+        );
 
       link.href = url;
-      link.download = documentItem.nomOriginal;
+      link.download =
+        documentItem.nomOriginal;
 
-      window.document.body.appendChild(link);
+      window.document.body.appendChild(
+        link
+      );
+
       link.click();
       link.remove();
 
       window.URL.revokeObjectURL(url);
-    } catch {
+    } catch (downloadError) {
+      console.error(
+        "Erreur téléchargement document :",
+        downloadError
+      );
+
       toast.error(
         "Impossible de télécharger le document."
       );
@@ -261,6 +403,14 @@ function DemandeDocuments({
     documentItem: DemandeDocument,
     statut: StatutDocument
   ) => {
+    if (!canVerifyDocuments) {
+      toast.error(
+        "Seul le responsable peut vérifier la conformité des documents lorsque la demande est en cours."
+      );
+
+      return;
+    }
+
     setSelectedDocument(documentItem);
     setNextDocumentStatus(statut);
     setMotifNonConformite("");
@@ -268,7 +418,9 @@ function DemandeDocuments({
   };
 
   const closeStatusDialog = () => {
-    if (updatingStatus) return;
+    if (updatingStatus) {
+      return;
+    }
 
     setStatusDialogOpen(false);
     setSelectedDocument(null);
@@ -276,85 +428,125 @@ function DemandeDocuments({
     setMotifNonConformite("");
   };
 
-  const handleConfirmStatus = async () => {
-    if (
-      !selectedDocument ||
-      !nextDocumentStatus
-    ) {
-      return;
-    }
+  const handleConfirmStatus =
+    async () => {
+      if (!canVerifyDocuments) {
+        toast.error(
+          "Vous n’êtes pas autorisé à vérifier ce document."
+        );
 
-    if (
-      nextDocumentStatus ===
-        StatutDocument.NON_CONFORME &&
-      motifNonConformite.trim().length < 5
-    ) {
-      toast.error(
-        "Le motif doit contenir au moins 5 caractères."
-      );
+        return;
+      }
 
-      return;
-    }
+      if (
+        !selectedDocument ||
+        !nextDocumentStatus
+      ) {
+        return;
+      }
 
-    try {
-      setUpdatingStatus(true);
-
-      await demandeDocumentService.updateStatus(
-        demandeId,
-        selectedDocument.id,
-        nextDocumentStatus,
+      if (
         nextDocumentStatus ===
-          StatutDocument.NON_CONFORME
-          ? motifNonConformite.trim()
-          : undefined
-      );
+          StatutDocument.NON_CONFORME &&
+        motifNonConformite.trim()
+          .length < 5
+      ) {
+        toast.error(
+          "Le motif doit contenir au moins 5 caractères."
+        );
 
-      await onReload();
+        return;
+      }
 
-      toast.success(
-        nextDocumentStatus ===
-          StatutDocument.CONFORME
-          ? "Le document est déclaré conforme."
-          : "Le document est déclaré non conforme."
-      );
+      try {
+        setUpdatingStatus(true);
 
-      setStatusDialogOpen(false);
-      setSelectedDocument(null);
-      setNextDocumentStatus(null);
-      setMotifNonConformite("");
-    } catch {
-      toast.error(
-        "Erreur lors de la vérification du document."
-      );
-    } finally {
-      setUpdatingStatus(false);
-    }
-  };
+        await demandeDocumentService
+          .updateStatus(
+            demandeId,
+            selectedDocument.id,
+            nextDocumentStatus,
+            nextDocumentStatus ===
+              StatutDocument.NON_CONFORME
+              ? motifNonConformite.trim()
+              : undefined
+          );
+
+        await onReload();
+
+        toast.success(
+          nextDocumentStatus ===
+            StatutDocument.CONFORME
+            ? "Le document est déclaré conforme."
+            : "Le document est déclaré non conforme."
+        );
+
+        setStatusDialogOpen(false);
+        setSelectedDocument(null);
+        setNextDocumentStatus(null);
+        setMotifNonConformite("");
+      } catch (statusError) {
+        console.error(
+          "Erreur vérification document :",
+          statusError
+        );
+
+        toast.error(
+          getErrorMessage(
+            statusError,
+            "Erreur lors de la vérification du document."
+          )
+        );
+      } finally {
+        setUpdatingStatus(false);
+      }
+    };
 
   const openDeleteDialog = (
     documentItem: DemandeDocument
   ) => {
+    if (!canDeleteDocuments) {
+      toast.error(
+        "Les documents peuvent uniquement être supprimés par l’agent avant la transmission de la demande."
+      );
+
+      return;
+    }
+
     setSelectedDocument(documentItem);
     setDeleteDialogOpen(true);
   };
 
   const closeDeleteDialog = () => {
-    if (deleting) return;
+    if (deleting) {
+      return;
+    }
 
     setDeleteDialogOpen(false);
     setSelectedDocument(null);
   };
 
   const handleDelete = async () => {
-    if (!selectedDocument) return;
+    if (!canDeleteDocuments) {
+      toast.error(
+        "Vous n’êtes pas autorisé à supprimer ce document."
+      );
+
+      return;
+    }
+
+    if (!selectedDocument) {
+      return;
+    }
 
     try {
       setDeleting(true);
 
-      await demandeDocumentService.deleteDocument(
-        demandeId,
-        selectedDocument.id
-      );
+      await demandeDocumentService
+        .deleteDocument(
+          demandeId,
+          selectedDocument.id
+        );
 
       await onReload();
 
@@ -364,9 +556,17 @@ function DemandeDocuments({
 
       setDeleteDialogOpen(false);
       setSelectedDocument(null);
-    } catch {
+    } catch (deleteError) {
+      console.error(
+        "Erreur suppression document :",
+        deleteError
+      );
+
       toast.error(
-        "Erreur lors de la suppression du document."
+        getErrorMessage(
+          deleteError,
+          "Erreur lors de la suppression du document."
+        )
       );
     } finally {
       setDeleting(false);
@@ -390,7 +590,8 @@ function DemandeDocuments({
   if (error) {
     return (
       <Alert severity="error">
-        Impossible de charger les pièces justificatives.
+        Impossible de charger les pièces
+        justificatives.
       </Alert>
     );
   }
@@ -412,7 +613,8 @@ function DemandeDocuments({
           spacing={2}
           sx={{
             mb: 3,
-            justifyContent: "space-between",
+            justifyContent:
+              "space-between",
             alignItems: {
               xs: "flex-start",
               sm: "center",
@@ -433,23 +635,27 @@ function DemandeDocuments({
               variant="body2"
               color="text.secondary"
             >
-              CIN ou passeport, contrat et procuration
+              CIN ou passeport, contrat et
+              procuration
             </Typography>
           </Box>
 
-          <Button
-            variant="contained"
-            startIcon={<UploadFileIcon />}
-            disabled={
-              demandeTerminee ||
-              availableTypes.length === 0
-            }
-            onClick={() =>
-              setUploadDialogOpen(true)
-            }
-          >
-            Ajouter un document
-          </Button>
+          {canUploadDocuments && (
+            <Button
+              variant="contained"
+              startIcon={
+                <UploadFileIcon />
+              }
+              disabled={
+                availableTypes.length === 0
+              }
+              onClick={
+                handleOpenUploadDialog
+              }
+            >
+              Ajouter un document
+            </Button>
+          )}
         </Stack>
 
         {demandeTerminee && (
@@ -457,26 +663,89 @@ function DemandeDocuments({
             severity="info"
             sx={{ mb: 3 }}
           >
-            Les documents d’une demande terminée
-            ne peuvent plus être modifiés.
+            Les documents d’une demande
+            terminée ne peuvent plus être
+            modifiés.
           </Alert>
         )}
 
+        {!demandeTerminee &&
+          isAgent &&
+          demandeStatut ===
+            StatutDemande.EN_ATTENTE && (
+            <Alert
+              severity="info"
+              sx={{ mb: 3 }}
+            >
+              Ajoutez les pièces
+              justificatives nécessaires
+              avant de transmettre la
+              demande au responsable.
+            </Alert>
+          )}
+
+        {!demandeTerminee &&
+          isAgent &&
+          demandeStatut ===
+            StatutDemande.EN_COURS && (
+            <Alert
+              severity="info"
+              sx={{ mb: 3 }}
+            >
+              La demande a été transmise.
+              Les documents sont maintenant
+              en lecture seule pour l’agent.
+            </Alert>
+          )}
+
+        {!demandeTerminee &&
+          isResponsable &&
+          demandeStatut ===
+            StatutDemande.EN_COURS && (
+            <Alert
+              severity="warning"
+              sx={{ mb: 3 }}
+            >
+              Vérifiez chaque pièce
+              justificative et déclarez-la
+              conforme ou non conforme avant
+              de prendre une décision.
+            </Alert>
+          )}
+
         {documents.length === 0 ? (
           <Alert severity="info">
-            Aucune pièce justificative ajoutée.
+            Aucune pièce justificative
+            ajoutée.
           </Alert>
         ) : (
           <TableContainer>
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Fichier</TableCell>
-                  <TableCell>Taille</TableCell>
-                  <TableCell>Statut</TableCell>
-                  <TableCell>Ajouté par</TableCell>
-                  <TableCell>Date</TableCell>
+                  <TableCell>
+                    Type
+                  </TableCell>
+
+                  <TableCell>
+                    Fichier
+                  </TableCell>
+
+                  <TableCell>
+                    Taille
+                  </TableCell>
+
+                  <TableCell>
+                    Statut
+                  </TableCell>
+
+                  <TableCell>
+                    Ajouté par
+                  </TableCell>
+
+                  <TableCell>
+                    Date
+                  </TableCell>
 
                   <TableCell align="center">
                     Actions
@@ -497,7 +766,9 @@ function DemandeDocuments({
                       </TableCell>
 
                       <TableCell>
-                        {documentItem.nomOriginal}
+                        {
+                          documentItem.nomOriginal
+                        }
                       </TableCell>
 
                       <TableCell>
@@ -523,7 +794,8 @@ function DemandeDocuments({
                             variant="caption"
                             color="error"
                             sx={{
-                              display: "block",
+                              display:
+                                "block",
                               mt: 1,
                             }}
                           >
@@ -537,12 +809,12 @@ function DemandeDocuments({
 
                       <TableCell>
                         {
-                          documentItem.utilisateur
-                            .prenom
+                          documentItem
+                            .utilisateur.prenom
                         }{" "}
                         {
-                          documentItem.utilisateur
-                            .nom
+                          documentItem
+                            .utilisateur.nom
                         }
                       </TableCell>
 
@@ -556,6 +828,7 @@ function DemandeDocuments({
                         <IconButton
                           color="primary"
                           title="Télécharger"
+                          aria-label={`Télécharger ${documentItem.nomOriginal}`}
                           onClick={() =>
                             handleDownload(
                               documentItem
@@ -565,13 +838,14 @@ function DemandeDocuments({
                           <DownloadIcon />
                         </IconButton>
 
-                        {!demandeTerminee &&
+                        {canVerifyDocuments &&
                           documentItem.statut ===
                             StatutDocument.DEPOSE && (
                             <>
                               <IconButton
                                 color="success"
                                 title="Déclarer conforme"
+                                aria-label={`Déclarer ${documentItem.nomOriginal} conforme`}
                                 onClick={() =>
                                   openStatusDialog(
                                     documentItem,
@@ -585,6 +859,7 @@ function DemandeDocuments({
                               <IconButton
                                 color="warning"
                                 title="Déclarer non conforme"
+                                aria-label={`Déclarer ${documentItem.nomOriginal} non conforme`}
                                 onClick={() =>
                                   openStatusDialog(
                                     documentItem,
@@ -597,18 +872,20 @@ function DemandeDocuments({
                             </>
                           )}
 
-                        <IconButton
-                          color="error"
-                          title="Supprimer"
-                          disabled={demandeTerminee}
-                          onClick={() =>
-                            openDeleteDialog(
-                              documentItem
-                            )
-                          }
-                        >
-                          <DeleteIcon />
-                        </IconButton>
+                        {canDeleteDocuments && (
+                          <IconButton
+                            color="error"
+                            title="Supprimer"
+                            aria-label={`Supprimer ${documentItem.nomOriginal}`}
+                            onClick={() =>
+                              openDeleteDialog(
+                                documentItem
+                              )
+                            }
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        )}
                       </TableCell>
                     </TableRow>
                   )
@@ -643,18 +920,23 @@ function DemandeDocuments({
               value={selectedType}
               onChange={(event) =>
                 setSelectedType(
-                  event.target.value as TypeDocument
+                  event.target
+                    .value as TypeDocument
                 )
               }
             >
-              {availableTypes.map((type) => (
-                <MenuItem
-                  key={type}
-                  value={type}
-                >
-                  {getDocumentTypeLabel(type)}
-                </MenuItem>
-              ))}
+              {availableTypes.map(
+                (type) => (
+                  <MenuItem
+                    key={type}
+                    value={type}
+                  >
+                    {getDocumentTypeLabel(
+                      type
+                    )}
+                  </MenuItem>
+                )
+              )}
             </TextField>
 
             <Box>
@@ -665,7 +947,8 @@ function DemandeDocuments({
                 accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
                 onChange={(event) =>
                   setSelectedFile(
-                    event.target.files?.[0] ??
+                    event.target
+                      .files?.[0] ??
                       null
                   )
                 }
@@ -675,7 +958,9 @@ function DemandeDocuments({
                 <Button
                   component="span"
                   variant="outlined"
-                  startIcon={<UploadFileIcon />}
+                  startIcon={
+                    <UploadFileIcon />
+                  }
                 >
                   Choisir un fichier
                 </Button>
@@ -758,14 +1043,16 @@ function DemandeDocuments({
                 )
               }
               error={
-                motifNonConformite.length > 0 &&
-                motifNonConformite.trim()
-                  .length < 5
+                motifNonConformite.length >
+                  0 &&
+                motifNonConformite
+                  .trim().length < 5
               }
               helperText={
-                motifNonConformite.length > 0 &&
-                motifNonConformite.trim()
-                  .length < 5
+                motifNonConformite.length >
+                  0 &&
+                motifNonConformite
+                  .trim().length < 5
                   ? "Le motif doit contenir au moins 5 caractères."
                   : `${motifNonConformite.length}/500 caractères`
               }
@@ -799,11 +1086,13 @@ function DemandeDocuments({
               (
                 nextDocumentStatus ===
                   StatutDocument.NON_CONFORME &&
-                motifNonConformite.trim()
-                  .length < 5
+                motifNonConformite
+                  .trim().length < 5
               )
             }
-            onClick={handleConfirmStatus}
+            onClick={
+              handleConfirmStatus
+            }
           >
             {updatingStatus
               ? "Traitement..."
@@ -824,9 +1113,12 @@ function DemandeDocuments({
 
         <DialogContent>
           <DialogContentText>
-            Voulez-vous vraiment supprimer le fichier{" "}
+            Voulez-vous vraiment supprimer
+            le fichier{" "}
             <strong>
-              {selectedDocument?.nomOriginal}
+              {
+                selectedDocument?.nomOriginal
+              }
             </strong>
             ?
           </DialogContentText>

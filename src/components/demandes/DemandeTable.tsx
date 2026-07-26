@@ -1,4 +1,12 @@
 import {
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  IconButton,
   Paper,
   Table,
   TableBody,
@@ -6,34 +14,48 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Chip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  Button,
-  IconButton,
+  Tooltip,
 } from "@mui/material";
 
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
+import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
+import EditRoundedIcon from "@mui/icons-material/EditRounded";
+import DeleteRoundedIcon from "@mui/icons-material/DeleteRounded";
 
-import { Link } from "react-router-dom";
-import { useState } from "react";
-import { toast } from "react-toastify";
+import {
+  Link,
+} from "react-router-dom";
+
+import {
+  useState,
+} from "react";
+
+import {
+  toast,
+} from "react-toastify";
 
 import demandeService from "../../services/demande.service";
 
+import {
+  useAuth,
+} from "../../hooks/useAuth";
 
+import {
+  ROLES,
+} from "../../utils/roles";
 
-import type { Demande } from "../../types/demande";
-import VisibilityIcon from "@mui/icons-material/Visibility";
+import {
+  StatutDemande,
+} from "../../types/demande";
+
 import {
   getStatusColor,
   getStatusLabel,
   isDemandeTerminee,
 } from "../../utils/demande";
+
+import type {
+  Demande,
+} from "../../types/demande";
 
 interface Props {
   demandes: Demande[];
@@ -44,61 +66,136 @@ function DemandeTable({
   demandes,
   onReload,
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const {
+    user,
+  } = useAuth();
 
-  const [selectedDemande, setSelectedDemande] =
-    useState<Demande | null>(null);
+  const [
+    deleteDialogOpen,
+    setDeleteDialogOpen,
+  ] = useState(false);
+
+  const [
+    selectedDemande,
+    setSelectedDemande,
+  ] = useState<Demande | null>(null);
+
+  const [
+    deleting,
+    setDeleting,
+  ] = useState(false);
+
+  const isAdmin =
+    user?.role === ROLES.ADMIN;
+
+  const isAgent =
+    user?.role === ROLES.AGENT;
+
+  const canEditDemande = (
+    demande: Demande
+  ): boolean => {
+    if (!user) {
+      return false;
+    }
+
+    if (
+      isDemandeTerminee(
+        demande.statut
+      )
+    ) {
+      return false;
+    }
+
+    /*
+     * L’administrateur conserve l’accès
+     * à toute demande non terminée.
+     */
+    if (isAdmin) {
+      return true;
+    }
+
+    /*
+     * L’agent ne peut modifier que sa
+     * propre demande avant transmission.
+     */
+    return (
+      isAgent &&
+      demande.utilisateur.id === user.id &&
+      demande.statut ===
+        StatutDemande.EN_ATTENTE
+    );
+  };
+
+  const canDeleteDemande = (
+    demande: Demande
+  ): boolean => {
+    return canEditDemande(demande);
+  };
 
   const handleDeleteClick = (
     demande: Demande
   ) => {
     setSelectedDemande(demande);
-    setOpen(true);
+    setDeleteDialogOpen(true);
   };
 
-  const handleClose = () => {
-    setOpen(false);
+  const handleCloseDeleteDialog = () => {
+    if (deleting) {
+      return;
+    }
+
+    setDeleteDialogOpen(false);
     setSelectedDemande(null);
   };
 
-  const handleConfirmDelete = async () => {
-    if (!selectedDemande) return;
+  const handleConfirmDelete =
+    async () => {
+      if (!selectedDemande) {
+        return;
+      }
 
-    try {
-      await demandeService.deleteDemande(
-        selectedDemande.id
-      );
+      try {
+        setDeleting(true);
 
-      handleClose();
+        await demandeService.deleteDemande(
+          selectedDemande.id
+        );
 
-      await onReload();
+        handleCloseDeleteDialog();
 
-      toast.success("Demande supprimée.");
-    } catch {
-      toast.error(
-        "Erreur lors de la suppression."
-      );
-    }
-  };
+        await onReload();
+
+        toast.success(
+          "Demande supprimée avec succès."
+        );
+      } catch {
+        toast.error(
+          "Erreur lors de la suppression de la demande."
+        );
+      } finally {
+        setDeleting(false);
+      }
+    };
 
   return (
     <>
-      <TableContainer component={Paper}>
-        <Table>
-
+      <TableContainer
+        component={Paper}
+        variant="outlined"
+      >
+        <Table
+          sx={{
+            minWidth: 950,
+          }}
+        >
           <TableHead>
             <TableRow>
-
               <TableCell>
-                N°
+                Numéro
               </TableCell>
 
               <TableCell>
-                Nom
-              </TableCell>
-
-              <TableCell>
-                Prénom
+                Demandeur
               </TableCell>
 
               <TableCell>
@@ -106,7 +203,7 @@ function DemandeTable({
               </TableCell>
 
               <TableCell>
-                Référence
+                Référence foncière
               </TableCell>
 
               <TableCell>
@@ -120,145 +217,197 @@ function DemandeTable({
               <TableCell align="center">
                 Actions
               </TableCell>
-
             </TableRow>
           </TableHead>
 
           <TableBody>
-
-            {demandes.map((demande) => (
-
-              <TableRow key={demande.id}>
-
-                <TableCell>
-                  {demande.numero}
-                </TableCell>
-
-                <TableCell>
-                  {demande.nomDemandeur}
-                </TableCell>
-
-                <TableCell>
-                  {demande.prenomDemandeur}
-                </TableCell>
-
-                <TableCell>
-                  {demande.cin}
-                </TableCell>
-
-                <TableCell>
-                  {demande.referenceFonciere}
-                </TableCell>
-
-                <TableCell>
-
-                  
-                <Chip
-                  label={getStatusLabel(demande.statut)}
-                  color={getStatusColor(demande.statut)}
-                  size="small"
-                />
-
-                </TableCell>
-
-                <TableCell>
-                  {demande.utilisateur.nom}{" "}
-                  {demande.utilisateur.prenom}
-                </TableCell>
-
-              <TableCell align="center">
-                <IconButton
-                  component={Link}
-                  to={`/demandes/${demande.id}`}
-                  color="info"
-                  title="Voir la demande"
+            {demandes.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={7}
+                  align="center"
+                  sx={{
+                    py: 6,
+                    color:
+                      "text.secondary",
+                  }}
                 >
-                  <VisibilityIcon />
-                </IconButton>
-
-                <IconButton
-                  component={Link}
-                  to={`/demandes/edit/${demande.id}`}
-                  color="primary"
-                  disabled={isDemandeTerminee(
-                    demande.statut
-                  )}
-                  title={
-                    isDemandeTerminee(demande.statut)
-                      ? "Une demande terminée ne peut plus être modifiée."
-                      : "Modifier la demande"
-                  }
-                >
-                  <EditIcon />
-                </IconButton>
-
-                <IconButton
-                  color="error"
-                  disabled={isDemandeTerminee(
-                    demande.statut
-                  )}
-                  title={
-                    isDemandeTerminee(demande.statut)
-                      ? "Une demande terminée ne peut plus être supprimée."
-                      : "Supprimer la demande"
-                  }
-                  onClick={() =>
-                    handleDeleteClick(demande)
-                  }
-                >
-                  <DeleteIcon />
-                </IconButton>
-              </TableCell>
+                  Aucune demande trouvée.
+                </TableCell>
               </TableRow>
+            ) : (
+              demandes.map((demande) => {
+                const canEdit =
+                  canEditDemande(
+                    demande
+                  );
 
-            ))}
+                const canDelete =
+                  canDeleteDemande(
+                    demande
+                  );
 
+                return (
+                  <TableRow
+                    key={demande.id}
+                    hover
+                  >
+                    <TableCell
+                      sx={{
+                        fontWeight: 700,
+                        color:
+                          "primary.main",
+                      }}
+                    >
+                      {demande.numero}
+                    </TableCell>
+
+                    <TableCell>
+                      {
+                        demande.prenomDemandeur
+                      }{" "}
+                      {
+                        demande.nomDemandeur
+                      }
+                    </TableCell>
+
+                    <TableCell>
+                      {demande.cin}
+                    </TableCell>
+
+                    <TableCell>
+                      {
+                        demande.referenceFonciere
+                      }
+                    </TableCell>
+
+                    <TableCell>
+                      <Chip
+                        label={getStatusLabel(
+                          demande.statut
+                        )}
+                        color={getStatusColor(
+                          demande.statut
+                        )}
+                        size="small"
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      {
+                        demande.utilisateur
+                          .prenom
+                      }{" "}
+                      {
+                        demande.utilisateur
+                          .nom
+                      }
+                    </TableCell>
+
+                    <TableCell align="center">
+                      <Tooltip title="Consulter la demande">
+                        <IconButton
+                          component={Link}
+                          to={`/demandes/${demande.id}`}
+                          color="info"
+                          aria-label={`Consulter la demande ${demande.numero}`}
+                        >
+                          <VisibilityRoundedIcon />
+                        </IconButton>
+                      </Tooltip>
+
+                      {canEdit && (
+                        <Tooltip title="Modifier la demande">
+                          <IconButton
+                            component={Link}
+                            to={`/demandes/edit/${demande.id}`}
+                            color="primary"
+                            aria-label={`Modifier la demande ${demande.numero}`}
+                          >
+                            <EditRoundedIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+
+                      {canDelete && (
+                        <Tooltip title="Supprimer la demande">
+                          <IconButton
+                            color="error"
+                            aria-label={`Supprimer la demande ${demande.numero}`}
+                            onClick={() =>
+                              handleDeleteClick(
+                                demande
+                              )
+                            }
+                          >
+                            <DeleteRoundedIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
           </TableBody>
-
         </Table>
       </TableContainer>
 
       <Dialog
-        open={open}
-        onClose={handleClose}
+        open={deleteDialogOpen}
+        onClose={
+          handleCloseDeleteDialog
+        }
+        fullWidth
+        maxWidth="xs"
       >
         <DialogTitle>
-          Confirmation
+          Supprimer la demande
         </DialogTitle>
 
         <DialogContent>
-
           <DialogContentText>
-
-            Voulez-vous vraiment supprimer la demande
-
+            Voulez-vous vraiment supprimer
+            la demande{" "}
             <strong>
-              {" "}
               {selectedDemande?.numero}
             </strong>
-
             ?
-
           </DialogContentText>
 
+          <DialogContentText
+            sx={{
+              mt: 2,
+              color: "error.main",
+            }}
+          >
+            Cette action est définitive.
+          </DialogContentText>
         </DialogContent>
 
         <DialogActions>
-
-          <Button onClick={handleClose}>
+          <Button
+            onClick={
+              handleCloseDeleteDialog
+            }
+            disabled={deleting}
+          >
             Annuler
           </Button>
 
           <Button
             color="error"
             variant="contained"
-            onClick={handleConfirmDelete}
+            disabled={deleting}
+            onClick={
+              handleConfirmDelete
+            }
           >
-            Supprimer
+            {deleting
+              ? "Suppression..."
+              : "Supprimer"}
           </Button>
-
         </DialogActions>
-
       </Dialog>
     </>
   );
