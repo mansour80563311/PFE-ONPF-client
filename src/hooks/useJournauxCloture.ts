@@ -32,7 +32,7 @@ export function useJournauxCloture() {
     useState("");
 
   const debouncedSearch =
-    useDebounce(search, 300);
+    useDebounce(search, 700);
 
   /*
    * Permet de distinguer le premier chargement
