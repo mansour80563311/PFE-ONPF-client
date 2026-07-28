@@ -1,7 +1,6 @@
 import {
   Box,
-  Card,
-  CardContent,
+  Paper,
   Typography,
 } from "@mui/material";
 
@@ -13,64 +12,110 @@ interface Props {
   title: string;
   value: number;
   icon: ReactNode;
+  description?: string;
 }
 
 function DashboardStatCard({
   title,
   value,
   icon,
+  description,
 }: Props) {
+  const formattedValue =
+    new Intl.NumberFormat(
+      "fr-FR"
+    ).format(value);
+
   return (
-    <Card
+    <Paper
+      variant="outlined"
       sx={{
         height: "100%",
-        borderRadius: 3,
+        p: 2.5,
+        borderColor: "divider",
+        transition:
+          "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
+
+        "&:hover": {
+          transform:
+            "translateY(-2px)",
+          borderColor:
+            "rgba(10, 74, 70, 0.28)",
+          boxShadow:
+            "0 10px 26px rgba(16, 56, 53, 0.07)",
+        },
       }}
     >
-      <CardContent>
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent:
-              "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Box>
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ mb: 1 }}
-            >
-              {title}
-            </Typography>
-
-            <Typography
-              variant="h4"
-              sx={{
-                fontWeight: 700,
-              }}
-            >
-              {value}
-            </Typography>
-          </Box>
-
-          <Box
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent:
+            "space-between",
+          alignItems: "flex-start",
+          gap: 2,
+        }}
+      >
+        <Box sx={{ minWidth: 0 }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
             sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 48,
-              height: 48,
-              borderRadius: "50%",
-              bgcolor: "action.hover",
+              mb: 1,
+              fontWeight: 700,
+              lineHeight: 1.45,
             }}
           >
-            {icon}
-          </Box>
+            {title}
+          </Typography>
+
+          <Typography
+            variant="h4"
+            sx={{
+              color: "primary.main",
+              fontWeight: 800,
+              lineHeight: 1.1,
+            }}
+          >
+            {formattedValue}
+          </Typography>
         </Box>
-      </CardContent>
-    </Card>
+
+        <Box
+          sx={{
+            width: 48,
+            height: 48,
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 2.5,
+            color: "primary.main",
+            bgcolor:
+              "rgba(10, 74, 70, 0.10)",
+
+            "& svg": {
+              fontSize: 25,
+            },
+          }}
+        >
+          {icon}
+        </Box>
+      </Box>
+
+      {description && (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{
+            display: "block",
+            mt: 1.5,
+            lineHeight: 1.5,
+          }}
+        >
+          {description}
+        </Typography>
+      )}
+    </Paper>
   );
 }
 
