@@ -84,8 +84,9 @@ function ViewDemandePage() {
   const {
     demande,
     loading,
+    errorMessage,
     reload,
-  } = useDemande(id!);
+  } = useDemande(id ?? "");
 
   const {
     historique,
@@ -292,14 +293,17 @@ function ViewDemandePage() {
     );
   }
 
-  if (!demande) {
+  if (
+    errorMessage ||
+    !demande
+  ) {
     return (
       <Alert severity="error">
-        Demande introuvable.
+        {errorMessage ??
+          "Demande introuvable."}
       </Alert>
     );
   }
-
   const isAdmin =
     user?.role === ROLES.ADMIN;
 

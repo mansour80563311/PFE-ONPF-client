@@ -24,6 +24,7 @@ import {
 } from "@mui/material";
 
 import UploadFileIcon from "@mui/icons-material/UploadFile";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 import DownloadIcon from "@mui/icons-material/Download";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -356,6 +357,94 @@ function DemandeDocuments({
     }
   };
 
+  /*
+   * Visualiser un document dans un nouvel
+   * onglet sans contourner l’authentification.
+   *
+   * Une fenêtre vide est ouverte immédiatement
+   * pour éviter le blocage des pop-up pendant
+   * l’attente de la réponse de l’API.
+   */
+  const handleView = async (
+    documentItem: DemandeDocument
+  ) => {
+    const previewWindow =
+      window.open(
+        "",
+        "_blank"
+      );
+
+    if (!previewWindow) {
+      toast.error(
+        "Le navigateur a bloqué l’ouverture du document. Autorisez les fenêtres pop-up."
+      );
+
+      return;
+    }
+
+    previewWindow.opener = null;
+
+    previewWindow.document.title =
+      "Chargement du document";
+
+    previewWindow.document.body.innerHTML = `
+      <div
+        style="
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: Arial, sans-serif;
+          color: #555;
+        "
+      >
+        Chargement du document...
+      </div>
+    `;
+
+    try {
+      const blob =
+        await demandeDocumentService
+          .downloadDocument(
+            demandeId,
+            documentItem.id
+          );
+
+      const url =
+        window.URL.createObjectURL(
+          blob
+        );
+
+      previewWindow.location.href =
+        url;
+
+      /*
+       * Le navigateur dispose d’un délai
+       * suffisant pour charger le Blob avant
+       * que l’URL temporaire soit libérée.
+       */
+      window.setTimeout(() => {
+        window.URL.revokeObjectURL(
+          url
+        );
+      }, 60000);
+    } catch (viewError) {
+      previewWindow.close();
+
+      console.error(
+        "Erreur visualisation document :",
+        viewError
+      );
+
+      toast.error(
+        getErrorMessage(
+          viewError,
+          "Impossible d’ouvrir le document."
+        )
+      );
+    }
+  };
+
   const handleDownload = async (
     documentItem: DemandeDocument
   ) => {
@@ -368,7 +457,9 @@ function DemandeDocuments({
           );
 
       const url =
-        window.URL.createObjectURL(blob);
+        window.URL.createObjectURL(
+          blob
+        );
 
       const link =
         window.document.createElement(
@@ -394,7 +485,10 @@ function DemandeDocuments({
       );
 
       toast.error(
-        "Impossible de télécharger le document."
+        getErrorMessage(
+          downloadError,
+          "Impossible de télécharger le document."
+        )
       );
     }
   };
@@ -582,7 +676,9 @@ function DemandeDocuments({
           py: 4,
         }}
       >
-        <CircularProgress size={30} />
+        <CircularProgress
+          size={30}
+        />
       </Box>
     );
   }
@@ -827,6 +923,19 @@ function DemandeDocuments({
                       <TableCell align="center">
                         <IconButton
                           color="primary"
+                          title="Voir le document"
+                          aria-label={`Voir ${documentItem.nomOriginal}`}
+                          onClick={() =>
+                            handleView(
+                              documentItem
+                            )
+                          }
+                        >
+                          <VisibilityIcon />
+                        </IconButton>
+
+                        <IconButton
+                          color="primary"
                           title="Télécharger"
                           aria-label={`Télécharger ${documentItem.nomOriginal}`}
                           onClick={() =>
@@ -983,7 +1092,9 @@ function DemandeDocuments({
 
         <DialogActions>
           <Button
-            onClick={closeUploadDialog}
+            onClick={
+              closeUploadDialog
+            }
             disabled={uploading}
           >
             Annuler
@@ -1067,7 +1178,9 @@ function DemandeDocuments({
 
         <DialogActions>
           <Button
-            onClick={closeStatusDialog}
+            onClick={
+              closeStatusDialog
+            }
             disabled={updatingStatus}
           >
             Annuler
@@ -1126,7 +1239,9 @@ function DemandeDocuments({
 
         <DialogActions>
           <Button
-            onClick={closeDeleteDialog}
+            onClick={
+              closeDeleteDialog
+            }
             disabled={deleting}
           >
             Annuler

@@ -1,10 +1,12 @@
-import { createContext } from "react";
+import {
+  createContext,
+} from "react";
 
-import type { User } from "../types/auth";
-
+import type {
+  User,
+} from "../types/auth";
 
 interface AuthContextType {
-
   user: User | null;
 
   token: string | null;
@@ -18,8 +20,14 @@ interface AuthContextType {
 
   isAuthenticated: boolean;
 
+  /*
+   * Indique que l’application vérifie
+   * actuellement le token enregistré.
+   */
+  isLoading: boolean;
 }
 
-
 export const AuthContext =
-  createContext<AuthContextType | null>(null);
+  createContext<AuthContextType | null>(
+    null
+  );
