@@ -78,6 +78,17 @@ class DemandeService {
   return response.data.data;
 }
 
+async verifierCni(
+  id: string
+): Promise<Demande> {
+  const response =
+    await api.patch<DemandeResponse>(
+      `/demandes/${id}/verifier-cni`
+    );
+
+  return response.data.data;
+}
+
   async deleteDemande(id: string) {
     const response = await api.delete<{
       success: boolean;

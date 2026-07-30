@@ -15,6 +15,7 @@ import HomeWorkRoundedIcon from "@mui/icons-material/HomeWorkRounded";
 import NotesRoundedIcon from "@mui/icons-material/NotesRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import VerifiedUserRoundedIcon from "@mui/icons-material/VerifiedUserRounded";
 
 import axios from "axios";
 
@@ -51,7 +52,12 @@ import type {
   Demande,
 } from "../../types/demande";
 
+import type {
+  IdentiteCni,
+} from "../../types/cni";
+
 import demandeService from "../../services/demande.service";
+import cniService from "../../services/cni.service";
 
 interface Props {
   demande?: Demande;
@@ -75,7 +81,8 @@ function getErrorMessage(
         | undefined;
 
     return (
-      responseData?.errors?.[0]?.message ??
+      responseData?.errors?.[0]
+        ?.message ??
       responseData?.message ??
       "Une erreur est survenue."
     );
@@ -84,48 +91,98 @@ function getErrorMessage(
   return "Une erreur inattendue est survenue.";
 }
 
+function formatDateFr(
+  value: string
+): string {
+  const [
+    year,
+    month,
+    day,
+  ] = value.split("-");
+
+  if (
+    !year ||
+    !month ||
+    !day
+  ) {
+    return value;
+  }
+
+  return `${day}/${month}/${year}`;
+}
+
 function DemandeForm({
   demande,
 }: Props) {
-  const navigate = useNavigate();
+  const navigate =
+    useNavigate();
 
   const [
     submitting,
     setSubmitting,
   ] = useState(false);
 
-  const isEditMode = Boolean(demande);
+  const [
+    verifyingCin,
+    setVerifyingCin,
+  ] = useState(false);
+
+  const [
+    identiteCni,
+    setIdentiteCni,
+  ] =
+    useState<IdentiteCni | null>(
+      null
+    );
+
+  const [
+    cniError,
+    setCniError,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+  const isEditMode =
+    Boolean(demande);
 
   const {
     register,
     handleSubmit,
     reset,
     watch,
+    setValue,
+    trigger,
 
     formState: {
       errors,
     },
-  } = useForm<DemandeFormData>({
-    resolver: zodResolver(
-      demandeSchema
-    ),
+  } =
+    useForm<DemandeFormData>({
+      resolver: zodResolver(
+        demandeSchema
+      ),
 
-    mode: "onBlur",
+      mode: "onBlur",
 
-    defaultValues: {
-      nomDemandeur: "",
-      prenomDemandeur: "",
-      cin: "",
-      telephone: "",
-      email: "",
-      referenceFonciere: "",
-      adresseBien: "",
-      observations: "",
-    },
-  });
+      defaultValues: {
+        nomDemandeur: "",
+        prenomDemandeur: "",
+        cin: "",
+        telephone: "",
+        email: "",
+        referenceFonciere: "",
+        adresseBien: "",
+        observations: "",
+      },
+    });
 
   const observations =
-    watch("observations") ?? "";
+    watch("observations") ??
+    "";
+
+  const cin =
+    watch("cin") ?? "";
 
   useEffect(() => {
     if (!demande) {
@@ -139,8 +196,7 @@ function DemandeForm({
       prenomDemandeur:
         demande.prenomDemandeur,
 
-      cin:
-        demande.cin,
+      cin: demande.cin,
 
       telephone:
         demande.telephone,
@@ -155,60 +211,199 @@ function DemandeForm({
         demande.adresseBien,
 
       observations:
-        demande.observations ?? "",
+        demande.observations ??
+        "",
     });
   }, [demande, reset]);
 
-  const onSubmit = async (
-    data: DemandeFormData
-  ) => {
-    try {
-      setSubmitting(true);
+  const handleCinChange =
+    () => {
+      if (identiteCni) {
+        setIdentiteCni(null);
 
-      if (demande) {
-        await demandeService
-          .updateDemande(
-            demande.id,
-            data
+        if (!demande) {
+          setValue(
+            "nomDemandeur",
+            "",
+            {
+              shouldDirty:
+                true,
+              shouldValidate:
+                false,
+            }
           );
 
-        toast.success(
-          "Demande modifiée avec succès."
-        );
-      } else {
-        await demandeService
-          .createDemande(data);
-
-        toast.success(
-          "Demande créée avec succès."
-        );
+          setValue(
+            "prenomDemandeur",
+            "",
+            {
+              shouldDirty:
+                true,
+              shouldValidate:
+                false,
+            }
+          );
+        }
       }
 
-      navigate("/demandes", {
-        replace: true,
-      });
-    } catch (error) {
-      toast.error(
-        getErrorMessage(error)
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
+      if (cniError) {
+        setCniError(null);
+      }
+    };
+
+  const handleVerifyCin =
+    async () => {
+      const isCinValid =
+        await trigger("cin");
+
+      if (!isCinValid) {
+        return;
+      }
+
+      try {
+        setVerifyingCin(
+          true
+        );
+
+        setCniError(null);
+
+        const identite =
+          await cniService
+            .verifierCni({
+              cin: cin.trim(),
+            });
+
+        setIdentiteCni(
+          identite
+        );
+
+        setValue(
+          "nomDemandeur",
+          identite.nom,
+          {
+            shouldDirty:
+              true,
+            shouldValidate:
+              true,
+          }
+        );
+
+        setValue(
+          "prenomDemandeur",
+          identite.prenom,
+          {
+            shouldDirty:
+              true,
+            shouldValidate:
+              true,
+          }
+        );
+
+        toast.success(
+          "Identité vérifiée avec succès."
+        );
+      } catch (error) {
+        const message =
+          getErrorMessage(
+            error
+          );
+
+        setIdentiteCni(
+          null
+        );
+
+        setCniError(
+          message
+        );
+
+        toast.error(
+          message
+        );
+      } finally {
+        setVerifyingCin(
+          false
+        );
+      }
+    };
+
+  const onSubmit =
+    async (
+      data: DemandeFormData
+    ) => {
+      if (
+        !demande &&
+        !identiteCni
+      ) {
+        toast.error(
+          "Veuillez vérifier le numéro CIN avant d’enregistrer la demande."
+        );
+
+        return;
+      }
+
+      try {
+        setSubmitting(
+          true
+        );
+
+        if (demande) {
+          await demandeService
+            .updateDemande(
+              demande.id,
+              data
+            );
+
+          toast.success(
+            "Demande modifiée avec succès."
+          );
+        } else {
+          await demandeService
+            .createDemande(
+              data
+            );
+
+          toast.success(
+            "Demande créée avec succès."
+          );
+        }
+
+        navigate(
+          "/demandes",
+          {
+            replace: true,
+          }
+        );
+      } catch (error) {
+        toast.error(
+          getErrorMessage(
+            error
+          )
+        );
+      } finally {
+        setSubmitting(
+          false
+        );
+      }
+    };
 
   return (
     <Paper
       component="form"
       noValidate
       variant="outlined"
-      onSubmit={handleSubmit(onSubmit)}
+      onSubmit={handleSubmit(
+        onSubmit
+      )}
       sx={{
         width: "100%",
+
         p: {
           xs: 2.5,
           sm: 4,
         },
-        borderColor: "divider",
+
+        borderColor:
+          "divider",
       }}
     >
       <Alert
@@ -217,10 +412,13 @@ function DemandeForm({
           mb: 4,
         }}
       >
-        Les champs marqués d’un astérisque
-        sont obligatoires. Vérifiez les
-        informations avant d’enregistrer la
-        demande.
+        Les champs marqués
+        d’un astérisque sont
+        obligatoires. Pour une
+        nouvelle demande,
+        vérifiez le numéro CIN
+        avant d’enregistrer le
+        dossier.
       </Alert>
 
       {/* Identité du demandeur */}
@@ -228,7 +426,8 @@ function DemandeForm({
       <Box
         sx={{
           display: "flex",
-          alignItems: "flex-start",
+          alignItems:
+            "flex-start",
           gap: 1.5,
           mb: 3,
         }}
@@ -239,10 +438,13 @@ function DemandeForm({
             height: 44,
             flexShrink: 0,
             display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            alignItems:
+              "center",
+            justifyContent:
+              "center",
             borderRadius: 2.5,
-            color: "primary.main",
+            color:
+              "primary.main",
             bgcolor:
               "rgba(10, 74, 70, 0.10)",
           }}
@@ -257,15 +459,18 @@ function DemandeForm({
               fontWeight: 700,
             }}
           >
-            Informations du demandeur
+            Informations du
+            demandeur
           </Typography>
 
           <Typography
             variant="body2"
             color="text.secondary"
           >
-            Identité et coordonnées de la
-            personne qui dépose la demande.
+            Vérifiez l’identité
+            du demandeur puis
+            renseignez ses
+            coordonnées.
           </Typography>
         </Box>
       </Box>
@@ -273,31 +478,224 @@ function DemandeForm({
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: {
-            xs: "1fr",
-            md: "repeat(2, minmax(0, 1fr))",
-          },
+
+          gridTemplateColumns:
+            {
+              xs: "1fr",
+
+              md: "repeat(2, minmax(0, 1fr))",
+            },
+
           gap: 2.5,
         }}
       >
+        {/* Vérification CIN */}
+
+        <Box
+          sx={{
+            gridColumn: {
+              xs: "auto",
+              md: "1 / -1",
+            },
+          }}
+        >
+          <Box
+            sx={{
+              display: "grid",
+
+              gridTemplateColumns:
+                {
+                  xs: "1fr",
+
+                  sm: "minmax(0, 1fr) auto",
+                },
+
+              gap: 1.5,
+
+              alignItems:
+                "start",
+            }}
+          >
+            <TextField
+              required
+              fullWidth
+              autoFocus
+              label="Numéro de la CIN"
+              placeholder="Ex. 12345678"
+              disabled={
+                submitting ||
+                verifyingCin
+              }
+              error={Boolean(
+                errors.cin
+              )}
+              helperText={
+                errors.cin
+                  ?.message ??
+                "Saisissez les 8 chiffres de la CIN."
+              }
+              slotProps={{
+                htmlInput: {
+                  inputMode:
+                    "numeric",
+
+                  maxLength: 8,
+                },
+              }}
+              {...register(
+                "cin",
+                {
+                  onChange:
+                    handleCinChange,
+                }
+              )}
+            />
+
+            <Button
+              type="button"
+              variant="outlined"
+              startIcon={
+                verifyingCin ? (
+                  <CircularProgress
+                    size={18}
+                    color="inherit"
+                  />
+                ) : (
+                  <VerifiedUserRoundedIcon />
+                )
+              }
+              disabled={
+                submitting ||
+                verifyingCin
+              }
+              onClick={() => {
+                void handleVerifyCin();
+              }}
+              sx={{
+                minHeight: 56,
+                whiteSpace:
+                  "nowrap",
+              }}
+            >
+              {verifyingCin
+                ? "Vérification..."
+                : identiteCni
+                  ? "Vérifier à nouveau"
+                  : "Vérifier la CIN"}
+            </Button>
+          </Box>
+
+          {cniError && (
+            <Alert
+              severity="error"
+              sx={{
+                mt: 1.5,
+              }}
+            >
+              {cniError}
+            </Alert>
+          )}
+
+          {identiteCni && (
+            <Alert
+              severity="success"
+              icon={
+                <VerifiedUserRoundedIcon />
+              }
+              sx={{
+                mt: 1.5,
+              }}
+            >
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight:
+                    700,
+
+                  mb: 0.5,
+                }}
+              >
+                Identité
+                confirmée par
+                le service CNI
+              </Typography>
+
+              <Typography
+                variant="body2"
+              >
+                Date de
+                naissance :{" "}
+                {formatDateFr(
+                  identiteCni
+                    .dateNaissance
+                )}
+              </Typography>
+
+              <Typography
+                variant="body2"
+              >
+                Adresse
+                officielle :{" "}
+                {
+                  identiteCni
+                    .adresse
+                }
+              </Typography>
+
+              <Typography
+                variant="body2"
+              >
+                Référence de
+                vérification :{" "}
+                {
+                  identiteCni
+                    .referenceVerification
+                }
+              </Typography>
+            </Alert>
+          )}
+        </Box>
+
+        {/* Nom */}
+
         <TextField
           required
           fullWidth
-          autoFocus
           label="Nom"
           placeholder="Ex. Mansour"
           autoComplete="family-name"
-          disabled={submitting}
+          disabled={
+            submitting ||
+            verifyingCin
+          }
           error={Boolean(
             errors.nomDemandeur
           )}
           helperText={
-            errors.nomDemandeur?.message
+            errors.nomDemandeur
+              ?.message ??
+            (identiteCni
+              ? "Renseigné automatiquement par le service CNI."
+              : undefined)
           }
+          slotProps={{
+            inputLabel: {
+              shrink: true,
+            },
+
+            htmlInput: {
+              readOnly:
+                Boolean(
+                  identiteCni
+                ),
+            },
+          }}
           {...register(
             "nomDemandeur"
           )}
         />
+
+        {/* Prénom */}
 
         <TextField
           required
@@ -305,38 +703,99 @@ function DemandeForm({
           label="Prénom"
           placeholder="Ex. Mohamed"
           autoComplete="given-name"
-          disabled={submitting}
+          disabled={
+            submitting ||
+            verifyingCin
+          }
           error={Boolean(
             errors.prenomDemandeur
           )}
           helperText={
             errors.prenomDemandeur
-              ?.message
+              ?.message ??
+            (identiteCni
+              ? "Renseigné automatiquement par le service CNI."
+              : undefined)
           }
+          slotProps={{
+            inputLabel: {
+              shrink: true,
+            },
+
+            htmlInput: {
+              readOnly:
+                Boolean(
+                  identiteCni
+                ),
+            },
+          }}
           {...register(
             "prenomDemandeur"
           )}
         />
 
+        {/* Date de naissance */}
+
         <TextField
-          required
           fullWidth
-          label="Numéro de la CIN"
-          placeholder="Ex. 12345678"
-          disabled={submitting}
-          error={Boolean(errors.cin)}
+          type="date"
+          label="Date de naissance"
+          value={
+            identiteCni
+              ?.dateNaissance ??
+            ""
+          }
+          disabled={
+            submitting ||
+            verifyingCin
+          }
           helperText={
-            errors.cin?.message ??
-            "Saisissez les 8 chiffres de la CIN."
+            identiteCni
+              ? "Renseignée automatiquement par le service CNI."
+              : "Vérifiez le numéro CIN pour récupérer la date de naissance."
           }
           slotProps={{
+            inputLabel: {
+              shrink: true,
+            },
+
             htmlInput: {
-              inputMode: "numeric",
-              maxLength: 8,
+              readOnly: true,
             },
           }}
-          {...register("cin")}
         />
+
+        {/* Adresse officielle du demandeur */}
+
+        <TextField
+          fullWidth
+          label="Adresse officielle"
+          value={
+            identiteCni?.adresse ??
+            ""
+          }
+          placeholder="Adresse récupérée depuis le service CNI"
+          disabled={
+            submitting ||
+            verifyingCin
+          }
+          helperText={
+            identiteCni
+              ? "Renseignée automatiquement par le service CNI."
+              : "Vérifiez le numéro CIN pour récupérer l’adresse officielle."
+          }
+          slotProps={{
+            inputLabel: {
+              shrink: true,
+            },
+
+            htmlInput: {
+              readOnly: true,
+            },
+          }}
+        />
+
+        {/* Téléphone */}
 
         <TextField
           required
@@ -344,21 +803,31 @@ function DemandeForm({
           label="Téléphone"
           placeholder="Ex. 20 000 000"
           autoComplete="tel"
-          disabled={submitting}
+          disabled={
+            submitting ||
+            verifyingCin
+          }
           error={Boolean(
             errors.telephone
           )}
           helperText={
-            errors.telephone?.message
+            errors.telephone
+              ?.message
           }
           slotProps={{
             htmlInput: {
-              inputMode: "tel",
+              inputMode:
+                "tel",
+
               maxLength: 20,
             },
           }}
-          {...register("telephone")}
+          {...register(
+            "telephone"
+          )}
         />
+
+        {/* Adresse e-mail */}
 
         <TextField
           fullWidth
@@ -366,10 +835,16 @@ function DemandeForm({
           label="Adresse e-mail"
           placeholder="Ex. nom@exemple.com"
           autoComplete="email"
-          disabled={submitting}
-          error={Boolean(errors.email)}
+          disabled={
+            submitting ||
+            verifyingCin
+          }
+          error={Boolean(
+            errors.email
+          )}
           helperText={
-            errors.email?.message ??
+            errors.email
+              ?.message ??
             "Champ facultatif."
           }
           sx={{
@@ -378,7 +853,9 @@ function DemandeForm({
               md: "1 / -1",
             },
           }}
-          {...register("email")}
+          {...register(
+            "email"
+          )}
         />
       </Box>
 
@@ -393,7 +870,8 @@ function DemandeForm({
       <Box
         sx={{
           display: "flex",
-          alignItems: "flex-start",
+          alignItems:
+            "flex-start",
           gap: 1.5,
           mb: 3,
         }}
@@ -404,10 +882,13 @@ function DemandeForm({
             height: 44,
             flexShrink: 0,
             display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            alignItems:
+              "center",
+            justifyContent:
+              "center",
             borderRadius: 2.5,
-            color: "primary.main",
+            color:
+              "primary.main",
             bgcolor:
               "rgba(10, 74, 70, 0.10)",
           }}
@@ -422,15 +903,18 @@ function DemandeForm({
               fontWeight: 700,
             }}
           >
-            Informations foncières
+            Informations
+            foncières
           </Typography>
 
           <Typography
             variant="body2"
             color="text.secondary"
           >
-            Identifiez le titre foncier et la
-            localisation du bien concerné.
+            Identifiez le titre
+            foncier et la
+            localisation du bien
+            concerné.
           </Typography>
         </Box>
       </Box>
@@ -438,10 +922,14 @@ function DemandeForm({
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: {
-            xs: "1fr",
-            md: "repeat(2, minmax(0, 1fr))",
-          },
+
+          gridTemplateColumns:
+            {
+              xs: "1fr",
+
+              md: "repeat(2, minmax(0, 1fr))",
+            },
+
           gap: 2.5,
         }}
       >
@@ -450,7 +938,10 @@ function DemandeForm({
           fullWidth
           label="Référence foncière"
           placeholder="Ex. RF-2026-001"
-          disabled={submitting}
+          disabled={
+            submitting ||
+            verifyingCin
+          }
           error={Boolean(
             errors.referenceFonciere
           )}
@@ -468,12 +959,16 @@ function DemandeForm({
           fullWidth
           label="Adresse du bien"
           placeholder="Gouvernorat, ville, localité..."
-          disabled={submitting}
+          disabled={
+            submitting ||
+            verifyingCin
+          }
           error={Boolean(
             errors.adresseBien
           )}
           helperText={
-            errors.adresseBien?.message
+            errors.adresseBien
+              ?.message
           }
           {...register(
             "adresseBien"
@@ -492,7 +987,8 @@ function DemandeForm({
       <Box
         sx={{
           display: "flex",
-          alignItems: "flex-start",
+          alignItems:
+            "flex-start",
           gap: 1.5,
           mb: 3,
         }}
@@ -503,10 +999,13 @@ function DemandeForm({
             height: 44,
             flexShrink: 0,
             display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            alignItems:
+              "center",
+            justifyContent:
+              "center",
             borderRadius: 2.5,
-            color: "primary.main",
+            color:
+              "primary.main",
             bgcolor:
               "rgba(10, 74, 70, 0.10)",
           }}
@@ -528,8 +1027,9 @@ function DemandeForm({
             variant="body2"
             color="text.secondary"
           >
-            Ajoutez toute information utile
-            au traitement du dossier.
+            Ajoutez toute
+            information utile au
+            traitement du dossier.
           </Typography>
         </Box>
       </Box>
@@ -540,12 +1040,16 @@ function DemandeForm({
         minRows={4}
         label="Observations complémentaires"
         placeholder="Précisions particulières concernant la demande..."
-        disabled={submitting}
+        disabled={
+          submitting ||
+          verifyingCin
+        }
         error={Boolean(
           errors.observations
         )}
         helperText={
-          errors.observations?.message ??
+          errors.observations
+            ?.message ??
           `${observations.length}/500 caractères`
         }
         slotProps={{
@@ -553,7 +1057,9 @@ function DemandeForm({
             maxLength: 500,
           },
         }}
-        {...register("observations")}
+        {...register(
+          "observations"
+        )}
       />
 
       <Divider
@@ -571,7 +1077,8 @@ function DemandeForm({
         }}
         spacing={1.5}
         sx={{
-          justifyContent: "flex-end",
+          justifyContent:
+            "flex-end",
 
           "& > button": {
             width: {
@@ -584,10 +1091,17 @@ function DemandeForm({
         <Button
           type="button"
           variant="outlined"
-          startIcon={<CloseRoundedIcon />}
-          disabled={submitting}
+          startIcon={
+            <CloseRoundedIcon />
+          }
+          disabled={
+            submitting ||
+            verifyingCin
+          }
           onClick={() =>
-            navigate("/demandes")
+            navigate(
+              "/demandes"
+            )
           }
         >
           Annuler
@@ -606,7 +1120,10 @@ function DemandeForm({
               <SaveRoundedIcon />
             )
           }
-          disabled={submitting}
+          disabled={
+            submitting ||
+            verifyingCin
+          }
         >
           {submitting
             ? isEditMode

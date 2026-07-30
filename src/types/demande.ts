@@ -1,5 +1,10 @@
-import type { User } from "./user";
+import type {
+  User,
+} from "./user";
 
+/*
+ * Statuts de traitement d’une demande.
+ */
 export const StatutDemande = {
   EN_ATTENTE: "EN_ATTENTE",
   EN_COURS: "EN_COURS",
@@ -10,35 +15,89 @@ export const StatutDemande = {
 export type StatutDemande =
   (typeof StatutDemande)[keyof typeof StatutDemande];
 
+/*
+ * Statuts possibles de la vérification CNI.
+ */
+export const StatutVerificationCni = {
+  NON_VERIFIEE: "NON_VERIFIEE",
+  VERIFIEE: "VERIFIEE",
+  ECHEC: "ECHEC",
+  INDISPONIBLE: "INDISPONIBLE",
+} as const;
+
+export type StatutVerificationCni =
+  (typeof StatutVerificationCni)[keyof typeof StatutVerificationCni];
+
 export interface Demande {
   id: string;
   numero: string;
 
+  /*
+   * Informations personnelles du demandeur.
+   */
   nomDemandeur: string;
   prenomDemandeur: string;
   cin: string;
 
   telephone: string;
-  email?: string;
+  email?: string | null;
 
+  /*
+   * Informations récupérées auprès
+   * du service CNI.
+   */
+  dateNaissanceDemandeur?: string | null;
+  adresseDemandeur?: string | null;
+
+  statutVerificationCni:
+    StatutVerificationCni;
+
+  dateVerificationCni?: string | null;
+  sourceVerificationCni?: string | null;
+  referenceVerificationCni?: string | null;
+  messageVerificationCni?: string | null;
+
+  /*
+   * Informations foncières.
+   */
   referenceFonciere: string;
   adresseBien: string;
 
+  /*
+   * Traitement de la demande.
+   */
   statut: StatutDemande;
 
-  observations?: string;
-  utilisateur: User;
-
+  observations?: string | null;
   motifRejet?: string | null;
 
+  /*
+   * Agent ayant créé la demande.
+   */
+  utilisateurId?: string;
+  utilisateur: User;
+
+  /*
+   * Journal de clôture.
+   */
   journalClotureId?: string | null;
-  journalCloture?: JournalClotureResume | null;
+
+  journalCloture?:
+    | JournalClotureResume
+    | null;
 
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CreateDemandeRequest {
+  /*
+   * Le frontend envoie seulement le CIN.
+   *
+   * Le backend appelle lui-même le service
+   * CNI pour obtenir les informations
+   * officielles.
+   */
   nomDemandeur: string;
   prenomDemandeur: string;
   cin: string;
@@ -50,8 +109,6 @@ export interface CreateDemandeRequest {
   adresseBien: string;
 
   observations?: string;
-
-
 }
 
 export interface UpdateDemandeRequest {
@@ -67,6 +124,7 @@ export interface UpdateDemandeRequest {
 
   observations?: string;
 }
+
 export interface DemandeResponse {
   success: boolean;
   message: string;
@@ -101,19 +159,30 @@ export interface HistoriqueUtilisateur {
 
 export interface HistoriqueStatutDemande {
   id: string;
-  ancienStatut: StatutDemande;
-  nouveauStatut: StatutDemande;
+
+  ancienStatut:
+    StatutDemande;
+
+  nouveauStatut:
+    StatutDemande;
+
   motif?: string | null;
+
   demandeId: string;
   utilisateurId: string;
+
   createdAt: string;
-  utilisateur: HistoriqueUtilisateur;
+
+  utilisateur:
+    HistoriqueUtilisateur;
 }
 
 export interface HistoriqueDemandeResponse {
   success: boolean;
   message: string;
-  data: HistoriqueStatutDemande[];
+
+  data:
+    HistoriqueStatutDemande[];
 }
 
 export interface ResponsableJournalCloture {
@@ -126,10 +195,14 @@ export interface ResponsableJournalCloture {
 export interface JournalClotureResume {
   id: string;
   numero: string;
+
   dateJour: string;
   dateCloture: string;
+
   observations?: string | null;
 
   responsableId: string;
-  responsable: ResponsableJournalCloture;
+
+  responsable:
+    ResponsableJournalCloture;
 }

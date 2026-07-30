@@ -2,20 +2,25 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogContentText,
   DialogTitle,
+  Paper,
   Stack,
   TextField,
+  Typography,
 } from "@mui/material";
 
 import AssignmentRoundedIcon from "@mui/icons-material/AssignmentRounded";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import CancelRoundedIcon from "@mui/icons-material/CancelRounded";
+import VerifiedUserRoundedIcon from "@mui/icons-material/VerifiedUserRounded";
+import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 
 import axios from "axios";
 
@@ -57,6 +62,11 @@ import demandeService from "../../services/demande.service";
 
 import {
   StatutDemande,
+  StatutVerificationCni,
+} from "../../types/demande";
+
+import type {
+  StatutVerificationCni as StatutVerificationCniType,
 } from "../../types/demande";
 
 import {
@@ -65,15 +75,113 @@ import {
 
 interface ApiErrorResponse {
   message?: string;
+
   errors?: Array<{
     message?: string;
   }>;
 }
 
-function ViewDemandePage() {
-  const navigate = useNavigate();
+function formatDate(
+  value?: string | null
+): string {
+  if (!value) {
+    return "Non renseignée";
+  }
 
-  const { id } = useParams<{
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return value;
+  }
+
+  return date.toLocaleDateString(
+    "fr-FR",
+    {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }
+  );
+}
+
+function formatDateTime(
+  value?: string | null
+): string {
+  if (!value) {
+    return "Non renseignée";
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return value;
+  }
+
+  return date.toLocaleString(
+    "fr-FR",
+    {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }
+  );
+}
+
+function getCniStatusLabel(
+  statut: StatutVerificationCniType
+): string {
+  switch (statut) {
+    case StatutVerificationCni.VERIFIEE:
+      return "Identité vérifiée";
+
+    case StatutVerificationCni.ECHEC:
+      return "Échec de la vérification";
+
+    case StatutVerificationCni.INDISPONIBLE:
+      return "Service indisponible";
+
+    case StatutVerificationCni.NON_VERIFIEE:
+    default:
+      return "Identité non vérifiée";
+  }
+}
+
+function formatCniSource(
+  source?: string | null
+): string {
+  if (!source) {
+    return "Non renseignée";
+  }
+
+  if (
+    source ===
+    "SERVICE_CNI_SIMULE"
+  ) {
+    return "Service CNI simulé";
+  }
+
+  return source;
+}
+
+function ViewDemandePage() {
+  const navigate =
+    useNavigate();
+
+  const {
+    id,
+  } = useParams<{
     id: string;
   }>();
 
@@ -86,21 +194,27 @@ function ViewDemandePage() {
     loading,
     errorMessage,
     reload,
-  } = useDemande(id ?? "");
+  } = useDemande(
+    id ?? ""
+  );
 
   const {
     historique,
     loadingHistory,
     historyError,
     reloadHistory,
-  } = useDemandeHistory(id!);
+  } = useDemandeHistory(
+    id ?? ""
+  );
 
   const {
     documents,
     loadingDocuments,
     documentsError,
     reloadDocuments,
-  } = useDemandeDocuments(id!);
+  } = useDemandeDocuments(
+    id ?? ""
+  );
 
   const [
     dialogOpen,
@@ -110,13 +224,19 @@ function ViewDemandePage() {
   const [
     nextStatus,
     setNextStatus,
-  ] = useState<StatutDemande | null>(
-    null
-  );
+  ] =
+    useState<StatutDemande | null>(
+      null
+    );
 
   const [
     updating,
     setUpdating,
+  ] = useState(false);
+
+  const [
+    verifyingStoredCni,
+    setVerifyingStoredCni,
   ] = useState(false);
 
   const [
@@ -127,46 +247,66 @@ function ViewDemandePage() {
   const getErrorMessage = (
     error: unknown
   ): string => {
-    if (axios.isAxiosError(error)) {
+    if (
+      axios.isAxiosError(
+        error
+      )
+    ) {
       const responseData =
-        error.response?.data as
+        error.response
+          ?.data as
           | ApiErrorResponse
           | undefined;
 
       return (
-        responseData?.errors?.[0]
+        responseData
+          ?.errors?.[0]
           ?.message ??
-        responseData?.message ??
-        "Erreur lors de la mise à jour du statut."
+        responseData
+          ?.message ??
+        "Une erreur est survenue."
       );
     }
 
-    return (
-      "Une erreur inattendue est survenue."
-    );
+    return "Une erreur inattendue est survenue.";
   };
 
   const openStatusDialog = (
     statut: StatutDemande
   ) => {
-    setNextStatus(statut);
+    setNextStatus(
+      statut
+    );
+
     setMotifRejet("");
-    setDialogOpen(true);
+
+    setDialogOpen(
+      true
+    );
   };
 
-  const closeStatusDialog = () => {
-    if (updating) {
-      return;
-    }
+  const closeStatusDialog =
+    () => {
+      if (updating) {
+        return;
+      }
 
-    setDialogOpen(false);
-    setNextStatus(null);
-    setMotifRejet("");
-  };
+      setDialogOpen(
+        false
+      );
+
+      setNextStatus(
+        null
+      );
+
+      setMotifRejet("");
+    };
 
   const getConfirmationMessage =
     (): string => {
-      switch (nextStatus) {
+      switch (
+        nextStatus
+      ) {
         case StatutDemande.EN_COURS:
           return (
             "Voulez-vous transmettre cette demande au responsable ? " +
@@ -192,7 +332,9 @@ function ViewDemandePage() {
 
   const getConfirmationButtonLabel =
     (): string => {
-      switch (nextStatus) {
+      switch (
+        nextStatus
+      ) {
         case StatutDemande.EN_COURS:
           return "Transmettre";
 
@@ -209,14 +351,19 @@ function ViewDemandePage() {
 
   const handleConfirmStatus =
     async () => {
-      if (!id || !nextStatus) {
+      if (
+        !id ||
+        !nextStatus
+      ) {
         return;
       }
 
       if (
         nextStatus ===
           StatutDemande.REJETEE &&
-        motifRejet.trim().length < 5
+        motifRejet
+          .trim()
+          .length < 5
       ) {
         toast.error(
           "Le motif de rejet doit contenir au moins 5 caractères."
@@ -226,20 +373,24 @@ function ViewDemandePage() {
       }
 
       try {
-        setUpdating(true);
-
-        await demandeService.updateStatus(
-          id,
-          {
-            statut: nextStatus,
-
-            ...(nextStatus ===
-              StatutDemande.REJETEE && {
-              motifRejet:
-                motifRejet.trim(),
-            }),
-          }
+        setUpdating(
+          true
         );
+
+        await demandeService
+          .updateStatus(
+            id,
+            {
+              statut:
+                nextStatus,
+
+              ...(nextStatus ===
+                StatutDemande.REJETEE && {
+                motifRejet:
+                  motifRejet.trim(),
+              }),
+            }
+          );
 
         await Promise.all([
           reload(),
@@ -267,15 +418,25 @@ function ViewDemandePage() {
           );
         }
 
-        setDialogOpen(false);
-        setNextStatus(null);
+        setDialogOpen(
+          false
+        );
+
+        setNextStatus(
+          null
+        );
+
         setMotifRejet("");
       } catch (error) {
         toast.error(
-          getErrorMessage(error)
+          getErrorMessage(
+            error
+          )
         );
       } finally {
-        setUpdating(false);
+        setUpdating(
+          false
+        );
       }
     };
 
@@ -284,7 +445,8 @@ function ViewDemandePage() {
       <Box
         sx={{
           display: "flex",
-          justifyContent: "center",
+          justifyContent:
+            "center",
           py: 6,
         }}
       >
@@ -304,19 +466,29 @@ function ViewDemandePage() {
       </Alert>
     );
   }
+
   const isAdmin =
-    user?.role === ROLES.ADMIN;
+    user?.role ===
+    ROLES.ADMIN;
 
   const isAgent =
-    user?.role === ROLES.AGENT;
+    user?.role ===
+    ROLES.AGENT;
 
   const isResponsable =
-    user?.role === ROLES.RESPONSABLE;
+    user?.role ===
+    ROLES.RESPONSABLE;
 
   const isDemandeOwner =
-    user?.id === demande.utilisateur.id;
+    user?.id ===
+    demande.utilisateur.id;
 
-  const canTransmit =
+  const isCniVerified =
+    demande
+      .statutVerificationCni ===
+    StatutVerificationCni.VERIFIEE;
+
+  const canManageTransmission =
     demande.statut ===
       StatutDemande.EN_ATTENTE &&
     (
@@ -327,6 +499,14 @@ function ViewDemandePage() {
       )
     );
 
+  const canTransmit =
+    canManageTransmission &&
+    isCniVerified;
+
+  const canVerifyStoredCni =
+    canManageTransmission &&
+    !isCniVerified;
+
   const canDecide =
     demande.statut ===
       StatutDemande.EN_COURS &&
@@ -335,8 +515,47 @@ function ViewDemandePage() {
       isResponsable
     );
 
+  const handleVerifyStoredCni =
+    async () => {
+      try {
+        setVerifyingStoredCni(
+          true
+        );
+
+        await demandeService
+          .verifierCni(
+            demande.id
+          );
+
+        await reload();
+
+        toast.success(
+          "L’identité CNI de la demande a été vérifiée avec succès."
+        );
+      } catch (error) {
+        /*
+         * En cas d’échec, le backend peut avoir
+         * enregistré le statut ECHEC ou
+         * INDISPONIBLE. La demande est donc
+         * rechargée avant d’afficher l’erreur.
+         */
+        await reload();
+
+        toast.error(
+          getErrorMessage(
+            error
+          )
+        );
+      } finally {
+        setVerifyingStoredCni(
+          false
+        );
+      }
+    };
+
   const statusActions =
-    canTransmit || canDecide ? (
+    canManageTransmission ||
+    canDecide ? (
       <Stack
         direction={{
           xs: "column",
@@ -344,20 +563,26 @@ function ViewDemandePage() {
         }}
         spacing={1.5}
       >
-        {canTransmit && (
+        {canManageTransmission && (
           <Button
             variant="contained"
             startIcon={
               <PlayArrowRoundedIcon />
             }
-            disabled={updating}
+            disabled={
+              updating ||
+              verifyingStoredCni ||
+              !canTransmit
+            }
             onClick={() =>
               openStatusDialog(
                 StatutDemande.EN_COURS
               )
             }
           >
-            Transmettre au responsable
+            {canTransmit
+              ? "Transmettre au responsable"
+              : "Identité CNI non vérifiée"}
           </Button>
         )}
 
@@ -369,7 +594,9 @@ function ViewDemandePage() {
               startIcon={
                 <CheckCircleRoundedIcon />
               }
-              disabled={updating}
+              disabled={
+                updating
+              }
               onClick={() =>
                 openStatusDialog(
                   StatutDemande.VALIDEE
@@ -385,7 +612,9 @@ function ViewDemandePage() {
               startIcon={
                 <CancelRoundedIcon />
               }
-              disabled={updating}
+              disabled={
+                updating
+              }
               onClick={() =>
                 openStatusDialog(
                   StatutDemande.REJETEE
@@ -404,16 +633,26 @@ function ViewDemandePage() {
       <PageHeader
         title={`Demande ${demande.numero}`}
         subtitle="Consultez les informations, les pièces justificatives et l’historique du traitement."
-        icon={<AssignmentRoundedIcon />}
-        actions={statusActions}
+        icon={
+          <AssignmentRoundedIcon />
+        }
+        actions={
+          statusActions
+        }
         breadcrumbs={[
           {
-            label: "Demandes",
+            label:
+              "Demandes",
+
             onClick: () =>
-              navigate("/demandes"),
+              navigate(
+                "/demandes"
+              ),
           },
+
           {
-            label: demande.numero,
+            label:
+              demande.numero,
           },
         ]}
       />
@@ -426,7 +665,9 @@ function ViewDemandePage() {
         isDemandeOwner && (
           <Alert
             severity="warning"
-            sx={{ mb: 3 }}
+            sx={{
+              mb: 3,
+            }}
           >
             Cette demande est encore en
             préparation. Vérifiez les
@@ -441,7 +682,9 @@ function ViewDemandePage() {
         isAgent && (
           <Alert
             severity="info"
-            sx={{ mb: 3 }}
+            sx={{
+              mb: 3,
+            }}
           >
             Cette demande a été transmise.
             Elle est maintenant en cours de
@@ -454,7 +697,9 @@ function ViewDemandePage() {
         isResponsable && (
           <Alert
             severity="info"
-            sx={{ mb: 3 }}
+            sx={{
+              mb: 3,
+            }}
           >
             Vérifiez les informations et la
             conformité de toutes les pièces
@@ -467,7 +712,9 @@ function ViewDemandePage() {
         StatutDemande.VALIDEE && (
           <Alert
             severity="success"
-            sx={{ mb: 3 }}
+            sx={{
+              mb: 3,
+            }}
           >
             Cette demande est validée. Son
             traitement est terminé et ses
@@ -479,11 +726,28 @@ function ViewDemandePage() {
         StatutDemande.REJETEE && (
           <Alert
             severity="error"
-            sx={{ mb: 3 }}
+            sx={{
+              mb: 3,
+            }}
           >
             Cette demande a été rejetée. Son
             traitement est terminé et ses
             données sont verrouillées.
+          </Alert>
+        )}
+
+      {canManageTransmission &&
+        !isCniVerified && (
+          <Alert
+            severity="warning"
+            sx={{
+              mb: 3,
+            }}
+          >
+            Cette demande ne peut pas être
+            transmise au responsable, car
+            l’identité du demandeur n’a pas
+            été vérifiée par le service CNI.
           </Alert>
         )}
 
@@ -493,36 +757,463 @@ function ViewDemandePage() {
         demande={demande}
       />
 
+      {/* Vérification de l’identité CNI */}
+
+      <Paper
+        variant="outlined"
+        sx={{
+          mt: 4,
+
+          p: {
+            xs: 2.5,
+            sm: 3,
+          },
+
+          borderColor:
+            isCniVerified
+              ? "success.light"
+              : "divider",
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            alignItems:
+              "flex-start",
+            justifyContent:
+              "space-between",
+            flexWrap: "wrap",
+            gap: 2,
+            mb: 3,
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              alignItems:
+                "center",
+              gap: 1.5,
+            }}
+          >
+            <Box
+              sx={{
+                width: 44,
+                height: 44,
+                display:
+                  "flex",
+                alignItems:
+                  "center",
+                justifyContent:
+                  "center",
+                flexShrink: 0,
+                borderRadius: 2.5,
+
+                color:
+                  isCniVerified
+                    ? "success.main"
+                    : "text.secondary",
+
+                bgcolor:
+                  isCniVerified
+                    ? "rgba(46, 125, 50, 0.10)"
+                    : "action.hover",
+              }}
+            >
+              <VerifiedUserRoundedIcon />
+            </Box>
+
+            <Box>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight:
+                    700,
+                }}
+              >
+                Vérification de
+                l’identité CNI
+              </Typography>
+
+              <Typography
+                variant="body2"
+                color="text.secondary"
+              >
+                Informations officielles
+                récupérées lors de la
+                vérification du numéro CIN.
+              </Typography>
+            </Box>
+          </Box>
+
+          <Stack
+            direction={{
+              xs: "column",
+              sm: "row",
+            }}
+            spacing={1.5}
+            sx={{
+              alignItems: {
+                xs: "stretch",
+                sm: "center",
+              },
+            }}
+          >
+            {canVerifyStoredCni && (
+              <Button
+                type="button"
+                variant="outlined"
+                startIcon={
+                  verifyingStoredCni ? (
+                    <CircularProgress
+                      size={18}
+                      color="inherit"
+                    />
+                  ) : (
+                    <RefreshRoundedIcon />
+                  )
+                }
+                disabled={
+                  verifyingStoredCni ||
+                  updating
+                }
+                onClick={() => {
+                  void handleVerifyStoredCni();
+                }}
+              >
+                {verifyingStoredCni
+                  ? "Vérification..."
+                  : demande
+                        .statutVerificationCni ===
+                      StatutVerificationCni.ECHEC
+                    ? "Réessayer la vérification"
+                    : demande
+                          .statutVerificationCni ===
+                        StatutVerificationCni.INDISPONIBLE
+                      ? "Relancer la vérification"
+                      : "Vérifier l’identité CNI"}
+              </Button>
+            )}
+
+            <Chip
+              icon={
+                isCniVerified
+                  ? (
+                      <CheckCircleRoundedIcon />
+                    )
+                  : undefined
+              }
+              label={getCniStatusLabel(
+                demande
+                  .statutVerificationCni
+              )}
+              color={
+                demande
+                  .statutVerificationCni ===
+                StatutVerificationCni.VERIFIEE
+                  ? "success"
+                  : demande
+                        .statutVerificationCni ===
+                      StatutVerificationCni.ECHEC
+                    ? "error"
+                    : demande
+                          .statutVerificationCni ===
+                        StatutVerificationCni.INDISPONIBLE
+                      ? "warning"
+                      : "default"
+              }
+              variant={
+                isCniVerified
+                  ? "filled"
+                  : "outlined"
+              }
+            />
+          </Stack>
+        </Box>
+
+        {demande
+          .sourceVerificationCni ===
+          "SERVICE_CNI_SIMULE" && (
+          <Alert
+            severity="info"
+            sx={{
+              mb: 3,
+            }}
+          >
+            Cette identité a été vérifiée
+            avec le service CNI simulé
+            utilisé pendant le développement
+            du projet.
+          </Alert>
+        )}
+
+        <Box
+          sx={{
+            display: "grid",
+
+            gridTemplateColumns: {
+              xs: "1fr",
+
+              sm: "repeat(2, minmax(0, 1fr))",
+
+              lg: "repeat(3, minmax(0, 1fr))",
+            },
+
+            gap: 2.5,
+          }}
+        >
+          <Box>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+            >
+              Numéro CIN
+            </Typography>
+
+            <Typography
+              variant="body1"
+              sx={{
+                fontWeight:
+                  600,
+              }}
+            >
+              {demande.cin}
+            </Typography>
+          </Box>
+
+          <Box>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+            >
+              Nom officiel
+            </Typography>
+
+            <Typography
+              variant="body1"
+              sx={{
+                fontWeight:
+                  600,
+              }}
+            >
+              {
+                demande.nomDemandeur
+              }
+            </Typography>
+          </Box>
+
+          <Box>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+            >
+              Prénom officiel
+            </Typography>
+
+            <Typography
+              variant="body1"
+              sx={{
+                fontWeight:
+                  600,
+              }}
+            >
+              {
+                demande.prenomDemandeur
+              }
+            </Typography>
+          </Box>
+
+          <Box>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+            >
+              Date de naissance
+            </Typography>
+
+            <Typography
+              variant="body1"
+              sx={{
+                fontWeight:
+                  600,
+              }}
+            >
+              {formatDate(
+                demande
+                  .dateNaissanceDemandeur
+              )}
+            </Typography>
+          </Box>
+
+          <Box>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+            >
+              Adresse officielle
+            </Typography>
+
+            <Typography
+              variant="body1"
+              sx={{
+                fontWeight:
+                  600,
+              }}
+            >
+              {demande
+                .adresseDemandeur ??
+                "Non renseignée"}
+            </Typography>
+          </Box>
+
+          <Box>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+            >
+              Date de vérification
+            </Typography>
+
+            <Typography
+              variant="body1"
+              sx={{
+                fontWeight:
+                  600,
+              }}
+            >
+              {formatDateTime(
+                demande
+                  .dateVerificationCni
+              )}
+            </Typography>
+          </Box>
+
+          <Box>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+            >
+              Source
+            </Typography>
+
+            <Typography
+              variant="body1"
+              sx={{
+                fontWeight:
+                  600,
+              }}
+            >
+              {formatCniSource(
+                demande
+                  .sourceVerificationCni
+              )}
+            </Typography>
+          </Box>
+
+          <Box>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+            >
+              Référence de vérification
+            </Typography>
+
+            <Typography
+              variant="body1"
+              sx={{
+                fontWeight:
+                  600,
+
+                overflowWrap:
+                  "anywhere",
+              }}
+            >
+              {demande
+                .referenceVerificationCni ??
+                "Non renseignée"}
+            </Typography>
+          </Box>
+
+          <Box>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+            >
+              Message de vérification
+            </Typography>
+
+            <Typography
+              variant="body1"
+              sx={{
+                fontWeight:
+                  600,
+              }}
+            >
+              {demande
+                .messageVerificationCni ??
+                "Non renseigné"}
+            </Typography>
+          </Box>
+        </Box>
+      </Paper>
+
       {/* Pièces justificatives */}
 
-      <Box sx={{ mt: 4 }}>
+      <Box
+        sx={{
+          mt: 4,
+        }}
+      >
         <DemandeDocuments
-          demandeId={demande.id}
+          demandeId={
+            demande.id
+          }
           demandeStatut={
             demande.statut
           }
-          documents={documents}
-          loading={loadingDocuments}
-          error={documentsError}
-          onReload={reloadDocuments}
+          documents={
+            documents
+          }
+          loading={
+            loadingDocuments
+          }
+          error={
+            documentsError
+          }
+          onReload={
+            reloadDocuments
+          }
         />
       </Box>
 
       {/* Historique */}
 
-      <Box sx={{ mt: 4 }}>
+      <Box
+        sx={{
+          mt: 4,
+        }}
+      >
         <DemandeHistory
-          historique={historique}
-          loading={loadingHistory}
-          error={historyError}
+          historique={
+            historique
+          }
+          loading={
+            loadingHistory
+          }
+          error={
+            historyError
+          }
         />
       </Box>
 
       {/* Confirmation du changement de statut */}
 
       <Dialog
-        open={dialogOpen}
-        onClose={closeStatusDialog}
+        open={
+          dialogOpen
+        }
+        onClose={
+          closeStatusDialog
+        }
         fullWidth
         maxWidth="sm"
       >
@@ -541,9 +1232,13 @@ function ViewDemandePage() {
 
         <DialogContent>
           <DialogContentText
-            sx={{ mb: 2 }}
+            sx={{
+              mb: 2,
+            }}
           >
-            {getConfirmationMessage()}
+            {
+              getConfirmationMessage()
+            }
           </DialogContentText>
 
           {nextStatus ===
@@ -556,28 +1251,45 @@ function ViewDemandePage() {
               minRows={4}
               label="Motif du rejet"
               placeholder="Indiquez clairement pourquoi cette demande est rejetée..."
-              value={motifRejet}
-              disabled={updating}
-              onChange={(event) =>
+              value={
+                motifRejet
+              }
+              disabled={
+                updating
+              }
+              onChange={(
+                event
+              ) =>
                 setMotifRejet(
-                  event.target.value
+                  event
+                    .target
+                    .value
                 )
               }
               error={
-                motifRejet.length > 0 &&
-                motifRejet.trim()
-                  .length < 5
+                motifRejet
+                  .length >
+                  0 &&
+                motifRejet
+                  .trim()
+                  .length <
+                  5
               }
               helperText={
-                motifRejet.length > 0 &&
-                motifRejet.trim()
-                  .length < 5
+                motifRejet
+                  .length >
+                  0 &&
+                motifRejet
+                  .trim()
+                  .length <
+                  5
                   ? "Le motif doit contenir au moins 5 caractères."
                   : `${motifRejet.length}/500 caractères`
               }
               slotProps={{
                 htmlInput: {
-                  maxLength: 500,
+                  maxLength:
+                    500,
                 },
               }}
             />
@@ -589,7 +1301,9 @@ function ViewDemandePage() {
             onClick={
               closeStatusDialog
             }
-            disabled={updating}
+            disabled={
+              updating
+            }
           >
             Annuler
           </Button>
@@ -610,8 +1324,10 @@ function ViewDemandePage() {
               (
                 nextStatus ===
                   StatutDemande.REJETEE &&
-                motifRejet.trim()
-                  .length < 5
+                motifRejet
+                  .trim()
+                  .length <
+                  5
               )
             }
             onClick={
