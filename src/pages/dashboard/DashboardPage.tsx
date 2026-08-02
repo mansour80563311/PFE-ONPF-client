@@ -63,7 +63,7 @@ import {
   getStatusLabel,
 } from "../../utils/demande";
 
-function DashboardPage() {
+function StandardDashboardPage() {
   const navigate = useNavigate();
 
   const {
@@ -1116,6 +1116,203 @@ function DashboardPage() {
         </Paper>
       )}
     </Box>
+  );
+}
+
+/*
+ * Tableau de bord réservé au Caissier.
+ *
+ * Il ne charge pas les statistiques générales,
+ * car le Caissier doit uniquement consulter
+ * les demandes en attente de paiement.
+ */
+function CaissierDashboardPage() {
+  const navigate =
+    useNavigate();
+
+  return (
+    <Box
+      sx={{
+        width: "100%",
+        maxWidth: 1500,
+        mx: "auto",
+      }}
+    >
+      <PageHeader
+        title="Espace caisse"
+        subtitle="Consultez les demandes en attente et enregistrez les paiements effectués par les citoyens."
+        icon={
+          <DashboardRoundedIcon />
+        }
+      />
+
+      <Alert
+        severity="info"
+        variant="outlined"
+        sx={{
+          mb: 3,
+        }}
+      >
+        <AlertTitle
+          sx={{
+            fontWeight: 700,
+          }}
+        >
+          Gestion des encaissements
+        </AlertTitle>
+
+        La liste de la caisse contient uniquement
+        les demandes en attente qui ne possèdent
+        pas encore de paiement.
+      </Alert>
+
+      <Paper
+        variant="outlined"
+        sx={{
+          p: {
+            xs: 2.5,
+            sm: 4,
+          },
+
+          borderColor:
+            "divider",
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: {
+              xs: "column",
+              sm: "row",
+            },
+            alignItems: {
+              xs: "flex-start",
+              sm: "center",
+            },
+            justifyContent:
+              "space-between",
+            gap: 3,
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              alignItems:
+                "flex-start",
+              gap: 1.5,
+            }}
+          >
+            <Box
+              sx={{
+                width: 52,
+                height: 52,
+                flexShrink: 0,
+                display: "flex",
+                alignItems:
+                  "center",
+                justifyContent:
+                  "center",
+                borderRadius: 2.5,
+                color:
+                  "primary.main",
+                bgcolor:
+                  "rgba(10, 74, 70, 0.10)",
+              }}
+            >
+              <AssignmentRoundedIcon />
+            </Box>
+
+            <Box>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 700,
+                }}
+              >
+                Demandes à encaisser
+              </Typography>
+
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  mt: 0.5,
+                  maxWidth: 650,
+                }}
+              >
+                Ouvrez la liste des demandes,
+                consultez le montant exigible,
+                saisissez le montant remis par
+                le citoyen et validez le paiement
+                en espèces.
+              </Typography>
+            </Box>
+          </Box>
+
+          <Button
+            variant="contained"
+            startIcon={
+              <AssignmentRoundedIcon />
+            }
+            endIcon={
+              <ArrowForwardRoundedIcon />
+            }
+            onClick={() =>
+              navigate(
+                "/demandes"
+              )
+            }
+            sx={{
+              whiteSpace:
+                "nowrap",
+            }}
+          >
+            Ouvrir les demandes à encaisser
+          </Button>
+        </Box>
+      </Paper>
+    </Box>
+  );
+}
+
+/*
+ * Sélection du tableau de bord selon
+ * le rôle de l’utilisateur connecté.
+ */
+function DashboardPage() {
+  const {
+    user,
+  } = useAuth();
+
+  if (!user) {
+    return (
+      <Paper
+        variant="outlined"
+        sx={{
+          minHeight: 300,
+          display: "flex",
+          alignItems:
+            "center",
+          justifyContent:
+            "center",
+        }}
+      >
+        <CircularProgress />
+      </Paper>
+    );
+  }
+
+  if (
+    user.role ===
+    ROLES.CAISSIER
+  ) {
+    return (
+      <CaissierDashboardPage />
+    );
+  }
+
+  return (
+    <StandardDashboardPage />
   );
 }
 

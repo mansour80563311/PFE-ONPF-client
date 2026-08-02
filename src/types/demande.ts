@@ -28,6 +28,22 @@ export const StatutVerificationCni = {
 export type StatutVerificationCni =
   (typeof StatutVerificationCni)[keyof typeof StatutVerificationCni];
 
+/*
+ * Langues disponibles pour le certificat.
+ *
+ * Le français est actuellement la langue
+ * de base. L’arabe et l’anglais nécessitent
+ * le supplément de traduction.
+ */
+export const LangueCertificat = {
+  FRANCAIS: "FRANCAIS",
+  ARABE: "ARABE",
+  ANGLAIS: "ANGLAIS",
+} as const;
+
+export type LangueCertificat =
+  (typeof LangueCertificat)[keyof typeof LangueCertificat];
+
 export interface Demande {
   id: string;
   numero: string;
@@ -56,6 +72,21 @@ export interface Demande {
   sourceVerificationCni?: string | null;
   referenceVerificationCni?: string | null;
   messageVerificationCni?: string | null;
+
+  /*
+   * Informations tarifaires du certificat.
+   */
+  nombreExemplaires: number;
+  langueCertificat: LangueCertificat;
+  traductionDemandee: boolean;
+
+  /*
+   * Les Decimal Prisma sont généralement
+   * reçus sous forme de chaînes JSON.
+   */
+  prixUnitaire: string;
+  supplementTraduction: string;
+  montantTotal: string;
 
   /*
    * Informations foncières.
@@ -92,11 +123,9 @@ export interface Demande {
 
 export interface CreateDemandeRequest {
   /*
-   * Le frontend envoie seulement le CIN.
-   *
-   * Le backend appelle lui-même le service
-   * CNI pour obtenir les informations
-   * officielles.
+   * Le backend vérifie lui-même le CIN
+   * et remplace le nom et le prénom par
+   * les informations officielles.
    */
   nomDemandeur: string;
   prenomDemandeur: string;
@@ -105,6 +134,20 @@ export interface CreateDemandeRequest {
   telephone: string;
   email?: string;
 
+  /*
+   * Paramètres utilisés par le backend
+   * pour calculer le montant.
+   */
+  nombreExemplaires: number;
+  langueCertificat: LangueCertificat;
+  traductionDemandee: boolean;
+
+  /*
+   * Le frontend n’envoie jamais :
+   * - prixUnitaire ;
+   * - supplementTraduction ;
+   * - montantTotal.
+   */
   referenceFonciere: string;
   adresseBien: string;
 
@@ -118,6 +161,10 @@ export interface UpdateDemandeRequest {
 
   telephone?: string;
   email?: string;
+
+  nombreExemplaires?: number;
+  langueCertificat?: LangueCertificat;
+  traductionDemandee?: boolean;
 
   referenceFonciere?: string;
   adresseBien?: string;

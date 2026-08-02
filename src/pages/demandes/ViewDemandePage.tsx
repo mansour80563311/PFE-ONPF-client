@@ -25,6 +25,7 @@ import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import axios from "axios";
 
 import {
+  useCallback,
   useState,
 } from "react";
 
@@ -41,6 +42,7 @@ import PageHeader from "../../components/common/PageHeader";
 import DemandeDetails from "../../components/demandes/DemandeDetails";
 import DemandeDocuments from "../../components/demandes/DemandeDocuments";
 import DemandeHistory from "../../components/demandes/DemandeHistory";
+import PaiementSection from "../../components/paiements/PaiementSection";
 
 import {
   useAuth,
@@ -68,6 +70,14 @@ import {
 import type {
   StatutVerificationCni as StatutVerificationCniType,
 } from "../../types/demande";
+
+import {
+  StatutPaiement,
+} from "../../types/paiement";
+
+import type {
+  Paiement,
+} from "../../types/paiement";
 
 import {
   ROLES,
@@ -239,10 +249,41 @@ function ViewDemandePage() {
     setVerifyingStoredCni,
   ] = useState(false);
 
+  /*
+   * Indique si la demande possède
+   * un paiement valide.
+   */
+  const [
+    paiementEffectue,
+    setPaiementEffectue,
+  ] = useState(false);
+
   const [
     motifRejet,
     setMotifRejet,
   ] = useState("");
+
+  /*
+   * Fonction transmise au composant
+   * PaiementSection.
+   *
+   * Elle permet d’activer le bouton
+   * de transmission dès que le paiement
+   * est chargé ou enregistré.
+   */
+  const handlePaiementChange =
+    useCallback(
+      (
+        paiement:
+          Paiement | null
+      ) => {
+        setPaiementEffectue(
+          paiement?.statut ===
+            StatutPaiement.PAYE
+        );
+      },
+      []
+    );
 
   const getErrorMessage = (
     error: unknown
@@ -499,9 +540,17 @@ function ViewDemandePage() {
       )
     );
 
+  /*
+   * La transmission exige :
+   *
+   * 1. une demande encore en attente ;
+   * 2. une identité CNI vérifiée ;
+   * 3. un paiement enregistré et valide.
+   */
   const canTransmit =
     canManageTransmission &&
-    isCniVerified;
+    isCniVerified &&
+    paiementEffectue;
 
   const canVerifyStoredCni =
     canManageTransmission &&
@@ -580,9 +629,11 @@ function ViewDemandePage() {
               )
             }
           >
-            {canTransmit
-              ? "Transmettre au responsable"
-              : "Identité CNI non vérifiée"}
+            {!isCniVerified
+              ? "Identité CNI non vérifiée"
+              : !paiementEffectue
+                ? "Paiement non effectué"
+                : "Transmettre au responsable"}
           </Button>
         )}
 
@@ -632,7 +683,7 @@ function ViewDemandePage() {
     <>
       <PageHeader
         title={`Demande ${demande.numero}`}
-        subtitle="Consultez les informations, les pièces justificatives et l’historique du traitement."
+        subtitle="Consultez les informations, le paiement, les pièces justificatives et l’historique du traitement."
         icon={
           <AssignmentRoundedIcon />
         }
@@ -671,8 +722,9 @@ function ViewDemandePage() {
           >
             Cette demande est encore en
             préparation. Vérifiez les
-            informations et ajoutez les
-            pièces justificatives avant de
+            informations, ajoutez les pièces
+            justificatives et assurez-vous que
+            le paiement est effectué avant de
             la transmettre au responsable.
           </Alert>
         )}
@@ -748,6 +800,22 @@ function ViewDemandePage() {
             transmise au responsable, car
             l’identité du demandeur n’a pas
             été vérifiée par le service CNI.
+          </Alert>
+        )}
+
+      {canManageTransmission &&
+        isCniVerified &&
+        !paiementEffectue && (
+          <Alert
+            severity="warning"
+            sx={{
+              mb: 3,
+            }}
+          >
+            Cette demande ne peut pas être
+            transmise au responsable tant que
+            son paiement n’a pas été enregistré
+            par la caisse.
           </Alert>
         )}
 
@@ -1155,6 +1223,26 @@ function ViewDemandePage() {
           </Box>
         </Box>
       </Paper>
+
+      {/* Paiement de la demande */}
+
+      <Box
+        sx={{
+          mt: 4,
+        }}
+      >
+        <PaiementSection
+          demande={
+            demande
+          }
+          onPaiementChange={
+            handlePaiementChange
+          }
+          onPaiementCreated={
+            reload
+          }
+        />
+      </Box>
 
       {/* Pièces justificatives */}
 

@@ -1,6 +1,17 @@
+export const UserRole = {
+  ADMIN: "ADMIN",
+  AGENT: "AGENT",
+  RESPONSABLE: "RESPONSABLE",
+  CAISSIER: "CAISSIER",
+} as const;
+
+export type UserRole =
+  (typeof UserRole)[keyof typeof UserRole];
+
 export interface Role {
   id: string;
-  nom: string;
+  nom: UserRole;
+  description?: string | null;
 }
 
 export interface User {

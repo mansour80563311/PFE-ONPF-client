@@ -44,8 +44,12 @@ function AppRoutes() {
 
         <Route element={<ProtectedRoute />}>
           <Route element={<MainLayout />}>
-            {/* Accessible aux trois rôles */}
-
+            {/*
+             * Tableau de bord, liste des demandes
+             * et consultation d’une demande.
+             *
+             * Accessibles aux quatre rôles.
+             */}
             <Route
               element={
                 <RoleRoute
@@ -53,29 +57,39 @@ function AppRoutes() {
                     ROLES.ADMIN,
                     ROLES.AGENT,
                     ROLES.RESPONSABLE,
+                    ROLES.CAISSIER,
                   ]}
                 />
               }
             >
               <Route
                 path="/dashboard"
-                element={<DashboardPage />}
+                element={
+                  <DashboardPage />
+                }
               />
 
               <Route
                 path="/demandes"
-                element={<DemandeListPage />}
+                element={
+                  <DemandeListPage />
+                }
               />
 
               <Route
                 path="/demandes/:id"
-                element={<ViewDemandePage />}
+                element={
+                  <ViewDemandePage />
+                }
               />
             </Route>
 
-            {/* Création et modification :
-                Administrateur et Agent */}
-
+            {/*
+             * Création et modification des demandes.
+             *
+             * Le Caissier ne peut ni créer
+             * ni modifier une demande.
+             */}
             <Route
               element={
                 <RoleRoute
@@ -101,35 +115,47 @@ function AppRoutes() {
               />
             </Route>
 
-            {/* Gestion des utilisateurs :
-                Administrateur uniquement */}
-
+            {/*
+             * Gestion des utilisateurs.
+             *
+             * Administrateur uniquement.
+             */}
             <Route
               element={
                 <RoleRoute
-                  roles={[ROLES.ADMIN]}
+                  roles={[
+                    ROLES.ADMIN,
+                  ]}
                 />
               }
             >
               <Route
                 path="/users"
-                element={<UserListPage />}
+                element={
+                  <UserListPage />
+                }
               />
 
               <Route
                 path="/users/create"
-                element={<CreateUserPage />}
+                element={
+                  <CreateUserPage />
+                }
               />
 
               <Route
                 path="/users/edit/:id"
-                element={<UpdateUserPage />}
+                element={
+                  <UpdateUserPage />
+                }
               />
             </Route>
 
-            {/* Journaux de clôture :
-                Administrateur et Responsable */}
-
+            {/*
+             * Journaux de clôture.
+             *
+             * Administrateur et Responsable.
+             */}
             <Route
               element={
                 <RoleRoute

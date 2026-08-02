@@ -4,8 +4,11 @@ import {
   Button,
   CircularProgress,
   Divider,
+  FormControlLabel,
+  MenuItem,
   Paper,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from "@mui/material";
@@ -16,6 +19,7 @@ import NotesRoundedIcon from "@mui/icons-material/NotesRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import VerifiedUserRoundedIcon from "@mui/icons-material/VerifiedUserRounded";
+import RequestQuoteRoundedIcon from "@mui/icons-material/RequestQuoteRounded";
 
 import axios from "axios";
 
@@ -25,6 +29,7 @@ import {
 } from "react";
 
 import {
+  Controller,
   useForm,
 } from "react-hook-form";
 
@@ -48,8 +53,13 @@ import type {
   DemandeFormData,
 } from "../../validations/demande.schema";
 
+import {
+  LangueCertificat,
+} from "../../types/demande";
+
 import type {
   Demande,
+  LangueCertificat as LangueCertificatType,
 } from "../../types/demande";
 
 import type {
@@ -70,6 +80,18 @@ interface ApiErrorResponse {
     message?: string;
   }>;
 }
+
+/*
+ * Tarification affichée dans le formulaire.
+ *
+ * Le backend recalcule toujours ces montants
+ * avant d’enregistrer la demande.
+ */
+const PRIX_UNITAIRE_CERTIFICAT =
+  30;
+
+const SUPPLEMENT_TRADUCTION =
+  40;
 
 function getErrorMessage(
   error: unknown
@@ -111,6 +133,14 @@ function formatDateFr(
   return `${day}/${month}/${year}`;
 }
 
+function formatMontant(
+  value: number
+): string {
+  return `${value
+    .toFixed(3)
+    .replace(".", ",")} DT`;
+}
+
 function DemandeForm({
   demande,
 }: Props) {
@@ -147,6 +177,7 @@ function DemandeForm({
     Boolean(demande);
 
   const {
+    control,
     register,
     handleSubmit,
     reset,
@@ -171,6 +202,15 @@ function DemandeForm({
         cin: "",
         telephone: "",
         email: "",
+
+        nombreExemplaires: 1,
+
+        langueCertificat:
+          LangueCertificat.FRANCAIS,
+
+        traductionDemandee:
+          false,
+
         referenceFonciere: "",
         adresseBien: "",
         observations: "",
@@ -184,6 +224,58 @@ function DemandeForm({
   const cin =
     watch("cin") ?? "";
 
+  const nombreExemplaires =
+    watch(
+      "nombreExemplaires"
+    ) ?? 1;
+
+  const langueCertificat =
+    watch(
+      "langueCertificat"
+    );
+
+  const traductionDemandee =
+    watch(
+      "traductionDemandee"
+    ) ?? false;
+
+  /*
+   * Protection de l’aperçu lorsque le champ
+   * numérique est momentanément vide.
+   */
+  const nombreExemplairesValide =
+    Number.isFinite(
+      nombreExemplaires
+    ) &&
+    nombreExemplaires > 0
+      ? nombreExemplaires
+      : 0;
+
+  const supplementTraduction =
+    traductionDemandee
+      ? SUPPLEMENT_TRADUCTION
+      : 0;
+
+  const montantTotalCalcule =
+    nombreExemplairesValide *
+      PRIX_UNITAIRE_CERTIFICAT +
+    supplementTraduction;
+
+  const dateNaissanceAffichee =
+    identiteCni
+      ?.dateNaissance ??
+    demande
+      ?.dateNaissanceDemandeur
+      ?.slice(0, 10) ??
+    "";
+
+  const adresseOfficielleAffichee =
+    identiteCni
+      ?.adresse ??
+    demande
+      ?.adresseDemandeur ??
+    "";
+
   useEffect(() => {
     if (!demande) {
       return;
@@ -196,13 +288,23 @@ function DemandeForm({
       prenomDemandeur:
         demande.prenomDemandeur,
 
-      cin: demande.cin,
+      cin:
+        demande.cin,
 
       telephone:
         demande.telephone,
 
       email:
         demande.email ?? "",
+
+      nombreExemplaires:
+        demande.nombreExemplaires,
+
+      langueCertificat:
+        demande.langueCertificat,
+
+      traductionDemandee:
+        demande.traductionDemandee,
 
       referenceFonciere:
         demande.referenceFonciere,
@@ -228,6 +330,7 @@ function DemandeForm({
             {
               shouldDirty:
                 true,
+
               shouldValidate:
                 false,
             }
@@ -239,6 +342,7 @@ function DemandeForm({
             {
               shouldDirty:
                 true,
+
               shouldValidate:
                 false,
             }
@@ -283,6 +387,7 @@ function DemandeForm({
           {
             shouldDirty:
               true,
+
             shouldValidate:
               true,
           }
@@ -294,6 +399,7 @@ function DemandeForm({
           {
             shouldDirty:
               true,
+
             shouldValidate:
               true,
           }
@@ -656,8 +762,6 @@ function DemandeForm({
           )}
         </Box>
 
-        {/* Nom */}
-
         <TextField
           required
           fullWidth
@@ -694,8 +798,6 @@ function DemandeForm({
             "nomDemandeur"
           )}
         />
-
-        {/* Prénom */}
 
         <TextField
           required
@@ -734,23 +836,19 @@ function DemandeForm({
           )}
         />
 
-        {/* Date de naissance */}
-
         <TextField
           fullWidth
           type="date"
           label="Date de naissance"
           value={
-            identiteCni
-              ?.dateNaissance ??
-            ""
+            dateNaissanceAffichee
           }
           disabled={
             submitting ||
             verifyingCin
           }
           helperText={
-            identiteCni
+            dateNaissanceAffichee
               ? "Renseignée automatiquement par le service CNI."
               : "Vérifiez le numéro CIN pour récupérer la date de naissance."
           }
@@ -765,14 +863,11 @@ function DemandeForm({
           }}
         />
 
-        {/* Adresse officielle du demandeur */}
-
         <TextField
           fullWidth
           label="Adresse officielle"
           value={
-            identiteCni?.adresse ??
-            ""
+            adresseOfficielleAffichee
           }
           placeholder="Adresse récupérée depuis le service CNI"
           disabled={
@@ -780,7 +875,7 @@ function DemandeForm({
             verifyingCin
           }
           helperText={
-            identiteCni
+            adresseOfficielleAffichee
               ? "Renseignée automatiquement par le service CNI."
               : "Vérifiez le numéro CIN pour récupérer l’adresse officielle."
           }
@@ -795,13 +890,11 @@ function DemandeForm({
           }}
         />
 
-        {/* Téléphone */}
-
         <TextField
           required
           fullWidth
           label="Téléphone"
-          placeholder="Ex. 20 000 000"
+          placeholder="Ex. 20000000"
           autoComplete="tel"
           disabled={
             submitting ||
@@ -817,17 +910,15 @@ function DemandeForm({
           slotProps={{
             htmlInput: {
               inputMode:
-                "tel",
+                "numeric",
 
-              maxLength: 20,
+              maxLength: 8,
             },
           }}
           {...register(
             "telephone"
           )}
         />
-
-        {/* Adresse e-mail */}
 
         <TextField
           fullWidth
@@ -974,6 +1065,358 @@ function DemandeForm({
             "adresseBien"
           )}
         />
+      </Box>
+
+      <Divider
+        sx={{
+          my: 4,
+        }}
+      />
+
+      {/* Paramètres du certificat */}
+
+      <Box
+        sx={{
+          display: "flex",
+          alignItems:
+            "flex-start",
+          gap: 1.5,
+          mb: 3,
+        }}
+      >
+        <Box
+          sx={{
+            width: 44,
+            height: 44,
+            flexShrink: 0,
+            display: "flex",
+            alignItems:
+              "center",
+            justifyContent:
+              "center",
+            borderRadius: 2.5,
+            color:
+              "primary.main",
+            bgcolor:
+              "rgba(10, 74, 70, 0.10)",
+          }}
+        >
+          <RequestQuoteRoundedIcon />
+        </Box>
+
+        <Box>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 700,
+            }}
+          >
+            Certificat et
+            tarification
+          </Typography>
+
+          <Typography
+            variant="body2"
+            color="text.secondary"
+          >
+            Indiquez le nombre
+            d’exemplaires et la
+            langue souhaitée afin
+            de calculer le montant
+            à payer.
+          </Typography>
+        </Box>
+      </Box>
+
+      <Box
+        sx={{
+          display: "grid",
+
+          gridTemplateColumns:
+            {
+              xs: "1fr",
+
+              md: "repeat(2, minmax(0, 1fr))",
+            },
+
+          gap: 2.5,
+        }}
+      >
+        <TextField
+          required
+          fullWidth
+          type="number"
+          label="Nombre d’exemplaires"
+          disabled={
+            submitting ||
+            verifyingCin
+          }
+          error={Boolean(
+            errors.nombreExemplaires
+          )}
+          helperText={
+            errors
+              .nombreExemplaires
+              ?.message ??
+            "Entre 1 et 20 exemplaires."
+          }
+          slotProps={{
+            htmlInput: {
+              min: 1,
+              max: 20,
+              step: 1,
+              inputMode:
+                "numeric",
+            },
+          }}
+          {...register(
+            "nombreExemplaires",
+            {
+              valueAsNumber:
+                true,
+            }
+          )}
+        />
+
+        <Controller
+          name="langueCertificat"
+          control={control}
+          render={({
+            field,
+          }) => (
+            <TextField
+              {...field}
+              required
+              select
+              fullWidth
+              label="Langue du certificat"
+              disabled={
+                submitting ||
+                verifyingCin
+              }
+              error={Boolean(
+                errors
+                  .langueCertificat
+              )}
+              helperText={
+                errors
+                  .langueCertificat
+                  ?.message ??
+                "Le français est la langue de base."
+              }
+              onChange={(
+                event
+              ) => {
+                const value =
+                  event.target
+                    .value as
+                    LangueCertificatType;
+
+                field.onChange(
+                  value
+                );
+
+                /*
+                 * Le français ne nécessite
+                 * jamais de traduction.
+                 */
+                if (
+                  value ===
+                  LangueCertificat.FRANCAIS
+                ) {
+                  setValue(
+                    "traductionDemandee",
+                    false,
+                    {
+                      shouldDirty:
+                        true,
+
+                      shouldValidate:
+                        true,
+                    }
+                  );
+                }
+              }}
+            >
+              <MenuItem
+                value={
+                  LangueCertificat.FRANCAIS
+                }
+              >
+                Français
+              </MenuItem>
+
+              <MenuItem
+                value={
+                  LangueCertificat.ARABE
+                }
+              >
+                Arabe
+              </MenuItem>
+
+              <MenuItem
+                value={
+                  LangueCertificat.ANGLAIS
+                }
+              >
+                Anglais
+              </MenuItem>
+            </TextField>
+          )}
+        />
+
+        <Box
+          sx={{
+            gridColumn: {
+              xs: "auto",
+              md: "1 / -1",
+            },
+          }}
+        >
+          <Controller
+            name="traductionDemandee"
+            control={control}
+            render={({
+              field,
+            }) => (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={
+                      field.value
+                    }
+                    disabled={
+                      submitting ||
+                      verifyingCin ||
+                      langueCertificat ===
+                        LangueCertificat.FRANCAIS
+                    }
+                    onChange={(
+                      _event,
+                      checked
+                    ) => {
+                      field.onChange(
+                        checked
+                      );
+                    }}
+                  />
+                }
+                label="Traduction demandée (+40 DT)"
+              />
+            )}
+          />
+
+          {errors
+            .traductionDemandee
+            ?.message && (
+            <Typography
+              variant="caption"
+              color="error"
+              sx={{
+                display: "block",
+                mt: 0.5,
+              }}
+            >
+              {
+                errors
+                  .traductionDemandee
+                  .message
+              }
+            </Typography>
+          )}
+
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{
+              display: "block",
+              mt: 0.5,
+            }}
+          >
+            La traduction est
+            obligatoire pour un
+            certificat en arabe ou
+            en anglais.
+          </Typography>
+        </Box>
+
+        <Alert
+          severity="info"
+          sx={{
+            gridColumn: {
+              xs: "auto",
+              md: "1 / -1",
+            },
+
+            alignItems:
+              "flex-start",
+          }}
+        >
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 700,
+              mb: 1,
+            }}
+          >
+            Aperçu du montant à
+            payer
+          </Typography>
+
+          <Typography
+            variant="body2"
+          >
+            Prix des certificats :{" "}
+            {nombreExemplairesValide}{" "}
+            ×{" "}
+            {formatMontant(
+              PRIX_UNITAIRE_CERTIFICAT
+            )}{" "}
+            ={" "}
+            {formatMontant(
+              nombreExemplairesValide *
+                PRIX_UNITAIRE_CERTIFICAT
+            )}
+          </Typography>
+
+          <Typography
+            variant="body2"
+          >
+            Supplément de
+            traduction :{" "}
+            {formatMontant(
+              supplementTraduction
+            )}
+          </Typography>
+
+          <Typography
+            variant="body1"
+            sx={{
+              mt: 1,
+              fontWeight: 800,
+            }}
+          >
+            Montant total :{" "}
+            {formatMontant(
+              montantTotalCalcule
+            )}
+          </Typography>
+
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{
+              display: "block",
+              mt: 1,
+            }}
+          >
+            Ce calcul est présenté
+            à titre indicatif. Le
+            montant définitif est
+            recalculé et sécurisé
+            par le serveur.
+          </Typography>
+        </Alert>
       </Box>
 
       <Divider

@@ -2,6 +2,7 @@ export const ROLES = {
   ADMIN: "ADMIN",
   AGENT: "AGENT",
   RESPONSABLE: "RESPONSABLE",
+  CAISSIER: "CAISSIER",
 } as const;
 
 export type Role =
@@ -14,4 +15,5 @@ export const ROLE_LABELS: Record<
   ADMIN: "Administrateur",
   AGENT: "Agent guichetier",
   RESPONSABLE: "Responsable",
+  CAISSIER: "Caissier",
 };

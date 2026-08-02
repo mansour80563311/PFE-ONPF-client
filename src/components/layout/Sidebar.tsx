@@ -17,6 +17,7 @@ import GroupsRoundedIcon from "@mui/icons-material/GroupsRounded";
 import AssignmentRoundedIcon from "@mui/icons-material/AssignmentRounded";
 import LockClockRoundedIcon from "@mui/icons-material/LockClockRounded";
 import AccountBalanceRoundedIcon from "@mui/icons-material/AccountBalanceRounded";
+import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
 
 import {
   useLocation,
@@ -27,7 +28,9 @@ import type {
   ReactNode,
 } from "react";
 
-import { useAuth } from "../../hooks/useAuth";
+import {
+  useAuth,
+} from "../../hooks/useAuth";
 
 import {
   ROLE_LABELS,
@@ -60,13 +63,16 @@ const navigationItems: NavigationItem[] = [
       ROLES.ADMIN,
       ROLES.AGENT,
       ROLES.RESPONSABLE,
+      ROLES.CAISSIER,
     ],
   },
   {
     label: "Utilisateurs",
     path: "/users",
     icon: <GroupsRoundedIcon />,
-    roles: [ROLES.ADMIN],
+    roles: [
+      ROLES.ADMIN,
+    ],
   },
   {
     label: "Demandes",
@@ -76,6 +82,14 @@ const navigationItems: NavigationItem[] = [
       ROLES.ADMIN,
       ROLES.AGENT,
       ROLES.RESPONSABLE,
+    ],
+  },
+  {
+    label: "Demandes à encaisser",
+    path: "/demandes",
+    icon: <PaymentsRoundedIcon />,
+    roles: [
+      ROLES.CAISSIER,
     ],
   },
   {
