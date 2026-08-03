@@ -2,6 +2,10 @@ import type {
   User,
 } from "./user";
 
+import type {
+  StatutPaiement,
+} from "./paiement";
+
 /*
  * Statuts de traitement d’une demande.
  */
@@ -44,12 +48,37 @@ export const LangueCertificat = {
 export type LangueCertificat =
   (typeof LangueCertificat)[keyof typeof LangueCertificat];
 
+/*
+ * Résumé du paiement retourné avec
+ * une demande.
+ *
+ * Lorsque paiement vaut null, aucun
+ * encaissement n’a encore été réalisé.
+ */
+export interface PaiementDemandeResume {
+  id: string;
+  numeroRecu: string;
+
+  statut:
+    StatutPaiement;
+
+  /*
+   * Les Decimal Prisma sont reçus
+   * sous forme de chaînes JSON.
+   */
+  montantExigible: string;
+  montantEncaisse: string;
+
+  datePaiement: string;
+}
+
 export interface Demande {
   id: string;
   numero: string;
 
   /*
-   * Informations personnelles du demandeur.
+   * Informations personnelles
+   * du demandeur.
    */
   nomDemandeur: string;
   prenomDemandeur: string;
@@ -62,22 +91,36 @@ export interface Demande {
    * Informations récupérées auprès
    * du service CNI.
    */
-  dateNaissanceDemandeur?: string | null;
-  adresseDemandeur?: string | null;
+  dateNaissanceDemandeur?:
+    string | null;
+
+  adresseDemandeur?:
+    string | null;
 
   statutVerificationCni:
     StatutVerificationCni;
 
-  dateVerificationCni?: string | null;
-  sourceVerificationCni?: string | null;
-  referenceVerificationCni?: string | null;
-  messageVerificationCni?: string | null;
+  dateVerificationCni?:
+    string | null;
+
+  sourceVerificationCni?:
+    string | null;
+
+  referenceVerificationCni?:
+    string | null;
+
+  messageVerificationCni?:
+    string | null;
 
   /*
-   * Informations tarifaires du certificat.
+   * Informations tarifaires
+   * du certificat.
    */
   nombreExemplaires: number;
-  langueCertificat: LangueCertificat;
+
+  langueCertificat:
+    LangueCertificat;
+
   traductionDemandee: boolean;
 
   /*
@@ -85,7 +128,10 @@ export interface Demande {
    * reçus sous forme de chaînes JSON.
    */
   prixUnitaire: string;
-  supplementTraduction: string;
+
+  supplementTraduction:
+    string;
+
   montantTotal: string;
 
   /*
@@ -95,23 +141,47 @@ export interface Demande {
   adresseBien: string;
 
   /*
-   * Traitement de la demande.
+   * Statut de traitement de la demande.
+   *
+   * Ce statut reste indépendant
+   * du statut de paiement.
    */
-  statut: StatutDemande;
+  statut:
+    StatutDemande;
 
   observations?: string | null;
   motifRejet?: string | null;
 
   /*
+   * Paiement de la demande.
+   *
+   * undefined :
+   * la route utilisée n’a pas retourné
+   * la relation paiement.
+   *
+   * null :
+   * aucun paiement n’existe.
+   *
+   * objet :
+   * un paiement a été enregistré.
+   */
+  paiement?:
+    | PaiementDemandeResume
+    | null;
+
+  /*
    * Agent ayant créé la demande.
    */
   utilisateurId?: string;
-  utilisateur: User;
+
+  utilisateur:
+    User;
 
   /*
    * Journal de clôture.
    */
-  journalClotureId?: string | null;
+  journalClotureId?:
+    string | null;
 
   journalCloture?:
     | JournalClotureResume
@@ -139,11 +209,15 @@ export interface CreateDemandeRequest {
    * pour calculer le montant.
    */
   nombreExemplaires: number;
-  langueCertificat: LangueCertificat;
+
+  langueCertificat:
+    LangueCertificat;
+
   traductionDemandee: boolean;
 
   /*
    * Le frontend n’envoie jamais :
+   *
    * - prixUnitaire ;
    * - supplementTraduction ;
    * - montantTotal.
@@ -163,7 +237,10 @@ export interface UpdateDemandeRequest {
   email?: string;
 
   nombreExemplaires?: number;
-  langueCertificat?: LangueCertificat;
+
+  langueCertificat?:
+    LangueCertificat;
+
   traductionDemandee?: boolean;
 
   referenceFonciere?: string;
@@ -175,14 +252,17 @@ export interface UpdateDemandeRequest {
 export interface DemandeResponse {
   success: boolean;
   message: string;
-  data: Demande;
+
+  data:
+    Demande;
 }
 
 export interface PaginatedDemandes {
   success: boolean;
   message: string;
 
-  data: Demande[];
+  data:
+    Demande[];
 
   meta: {
     page: number;
@@ -193,7 +273,9 @@ export interface PaginatedDemandes {
 }
 
 export interface UpdateDemandeStatusRequest {
-  statut: StatutDemande;
+  statut:
+    StatutDemande;
+
   motifRejet?: string;
 }
 
