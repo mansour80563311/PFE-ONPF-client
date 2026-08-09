@@ -13,6 +13,7 @@ import {
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
 import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+import PrintRoundedIcon from "@mui/icons-material/PrintRounded";
 
 import axios from "axios";
 
@@ -56,6 +57,7 @@ import {
 } from "../../hooks/useAuth";
 
 import paiementService from "../../services/paiement.service";
+import recuPaiementService from "../../services/recu-paiement.service";
 
 import {
   paiementSchema,
@@ -80,10 +82,6 @@ interface Props {
   /*
    * Informe la page parente de la présence
    * ou de l’absence d’un paiement.
-   *
-   * Cette information permettra notamment
-   * d’activer ou de désactiver le bouton
-   * de transmission au responsable.
    */
   onPaiementChange?: (
     paiement: Paiement | null
@@ -120,6 +118,17 @@ function getErrorMessage(
         ?.message ??
       "Une erreur est survenue."
     );
+  }
+
+  /*
+   * Le service du reçu transforme les
+   * erreurs Blob en instances Error.
+   */
+  if (
+    error instanceof Error &&
+    error.message
+  ) {
+    return error.message;
   }
 
   return "Une erreur inattendue est survenue.";
@@ -215,6 +224,15 @@ function PaiementSection({
   const [
     submitting,
     setSubmitting,
+  ] = useState(false);
+
+  /*
+   * Indique que le PDF est en cours
+   * de récupération depuis le backend.
+   */
+  const [
+    openingReceipt,
+    setOpeningReceipt,
   ] = useState(false);
 
   const [
@@ -313,6 +331,20 @@ function PaiementSection({
     !paiement;
 
   /*
+   * Seul le Caissier ou l’Administrateur
+   * peut accéder à la route sécurisée
+   * du reçu PDF.
+   */
+  const canPrintReceipt =
+    Boolean(
+      paiement
+    ) &&
+    (
+      isAdmin ||
+      isCaissier
+    );
+
+  /*
    * Recherche le paiement associé
    * à la demande.
    */
@@ -338,10 +370,6 @@ function PaiementSection({
             result
           );
 
-          /*
-           * Informe immédiatement la page
-           * parente qu’un paiement existe.
-           */
           onPaiementChange?.(
             result
           );
@@ -361,10 +389,6 @@ function PaiementSection({
               null
             );
 
-            /*
-             * Informe la page parente que la
-             * demande n’est pas encore payée.
-             */
             onPaiementChange?.(
               null
             );
@@ -438,11 +462,6 @@ function PaiementSection({
           result
         );
 
-        /*
-         * Informe immédiatement la page
-         * parente que le paiement vient
-         * d’être enregistré.
-         */
         onPaiementChange?.(
           result
         );
@@ -465,6 +484,42 @@ function PaiementSection({
         );
       } finally {
         setSubmitting(
+          false
+        );
+      }
+    };
+
+  /*
+   * Ouvre le reçu PDF dans un nouvel onglet.
+   *
+   * L’utilisateur pourra ensuite utiliser
+   * le bouton d’impression du lecteur PDF
+   * du navigateur.
+   */
+  const handleOpenReceipt =
+    async () => {
+      if (!paiement) {
+        return;
+      }
+
+      try {
+        setOpeningReceipt(
+          true
+        );
+
+        await recuPaiementService
+          .openRecu(
+            paiement.id,
+            paiement.numeroRecu
+          );
+      } catch (error) {
+        toast.error(
+          getErrorMessage(
+            error
+          )
+        );
+      } finally {
+        setOpeningReceipt(
           false
         );
       }
@@ -543,44 +598,83 @@ function PaiementSection({
                   700,
               }}
             >
-              Paiement à la
-              caisse
+              Paiement à la caisse
             </Typography>
 
             <Typography
               variant="body2"
               color="text.secondary"
             >
-              Encaissement total
-              de la demande en
-              espèces.
+              Encaissement total de la
+              demande en espèces.
             </Typography>
           </Box>
         </Box>
 
         {paiement && (
           <Stack
-            direction="row"
-            spacing={1}
+            direction={{
+              xs: "column",
+              sm: "row",
+            }}
+            spacing={1.5}
             sx={{
-              alignItems:
-                "center",
+              alignItems: {
+                xs: "stretch",
+                sm: "center",
+              },
             }}
           >
-            <CheckCircleRoundedIcon
-              color="success"
-            />
-
-            <Typography
-              variant="body2"
-              color="success.main"
+            <Stack
+              direction="row"
+              spacing={1}
               sx={{
-                fontWeight:
-                  700,
+                alignItems:
+                  "center",
               }}
             >
-              Paiement effectué
-            </Typography>
+              <CheckCircleRoundedIcon
+                color="success"
+              />
+
+              <Typography
+                variant="body2"
+                color="success.main"
+                sx={{
+                  fontWeight:
+                    700,
+                }}
+              >
+                Paiement effectué
+              </Typography>
+            </Stack>
+
+            {canPrintReceipt && (
+              <Button
+                type="button"
+                variant="outlined"
+                startIcon={
+                  openingReceipt ? (
+                    <CircularProgress
+                      size={18}
+                      color="inherit"
+                    />
+                  ) : (
+                    <PrintRoundedIcon />
+                  )
+                }
+                disabled={
+                  openingReceipt
+                }
+                onClick={() => {
+                  void handleOpenReceipt();
+                }}
+              >
+                {openingReceipt
+                  ? "Ouverture..."
+                  : "Imprimer le reçu"}
+              </Button>
+            )}
           </Stack>
         )}
       </Box>
@@ -622,11 +716,9 @@ function PaiementSection({
                 mb: 3,
               }}
             >
-              Le paiement a été
-              enregistré avec
-              succès. Le reçu est
-              conservé dans le
-              système.
+              Le paiement a été enregistré
+              avec succès. Le reçu est
+              conservé dans le système.
             </Alert>
 
             <Box
@@ -888,11 +980,9 @@ function PaiementSection({
                 mb: 3,
               }}
             >
-              Cette demande n’a
-              pas encore été
-              payée. Elle ne peut
-              pas être transmise
-              au responsable.
+              Cette demande n’a pas encore
+              été payée. Elle ne peut pas
+              être transmise au responsable.
             </Alert>
 
             <Box
@@ -914,8 +1004,7 @@ function PaiementSection({
                   variant="caption"
                   color="text.secondary"
                 >
-                  Nombre
-                  d’exemplaires
+                  Nombre d’exemplaires
                 </Typography>
 
                 <Typography
@@ -981,8 +1070,7 @@ function PaiementSection({
                   variant="caption"
                   color="text.secondary"
                 >
-                  Supplément de
-                  traduction
+                  Supplément de traduction
                 </Typography>
 
                 <Typography
@@ -1009,8 +1097,7 @@ function PaiementSection({
               <Typography
                 variant="body2"
               >
-                Montant total à
-                encaisser
+                Montant total à encaisser
               </Typography>
 
               <Typography
@@ -1075,10 +1162,8 @@ function PaiementSection({
                       mt: 2,
                     }}
                   >
-                    Le montant
-                    remis est
-                    insuffisant. Il
-                    manque{" "}
+                    Le montant remis est
+                    insuffisant. Il manque{" "}
                     {formatMontant(
                       montantExigible -
                         montantRemisNombre
@@ -1097,8 +1182,7 @@ function PaiementSection({
                       mt: 2,
                     }}
                   >
-                    Monnaie à
-                    rendre :{" "}
+                    Monnaie à rendre :{" "}
                     <strong>
                       {formatMontant(
                         monnaieRendue
@@ -1183,11 +1267,9 @@ function PaiementSection({
                   mt: 3,
                 }}
               >
-                Seul un caissier
-                ou un
-                administrateur
-                peut enregistrer
-                le paiement.
+                Seul un caissier ou un
+                administrateur peut
+                enregistrer le paiement.
               </Alert>
             )}
           </>

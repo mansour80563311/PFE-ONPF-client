@@ -21,6 +21,9 @@ import JournalClotureListPage from "../pages/journaux-cloture/JournalClotureList
 import CreateJournalCloturePage from "../pages/journaux-cloture/CreateJournalCloturePage";
 import ViewJournalCloturePage from "../pages/journaux-cloture/ViewJournalCloturePage";
 
+import JournalCaisseListPage from "../pages/journaux-caisse/JournalCaisseListPage";
+import ViewJournalCaissePage from "../pages/journaux-caisse/ViewJournalCaissePage";
+
 import ProtectedRoute from "./ProtectedRoute";
 import RoleRoute from "./RoleRoute";
 import MainLayout from "../layouts/MainLayout";
@@ -37,13 +40,23 @@ function AppRoutes() {
 
         <Route
           path="/"
-          element={<LoginPage />}
+          element={
+            <LoginPage />
+          }
         />
 
         {/* Routes nécessitant une connexion */}
 
-        <Route element={<ProtectedRoute />}>
-          <Route element={<MainLayout />}>
+        <Route
+          element={
+            <ProtectedRoute />
+          }
+        >
+          <Route
+            element={
+              <MainLayout />
+            }
+          >
             {/*
              * Tableau de bord, liste des demandes
              * et consultation d’une demande.
@@ -85,10 +98,10 @@ function AppRoutes() {
             </Route>
 
             {/*
-             * Création et modification des demandes.
+             * Création et modification
+             * des demandes.
              *
-             * Le Caissier ne peut ni créer
-             * ni modifier une demande.
+             * Administrateur et Agent.
              */}
             <Route
               element={
@@ -152,7 +165,8 @@ function AppRoutes() {
             </Route>
 
             {/*
-             * Journaux de clôture.
+             * Journaux de clôture
+             * des demandes.
              *
              * Administrateur et Responsable.
              */}
@@ -184,6 +198,46 @@ function AppRoutes() {
                 path="/journaux-cloture/:id"
                 element={
                   <ViewJournalCloturePage />
+                }
+              />
+            </Route>
+
+            {/*
+             * Journaux de caisse.
+             *
+             * CAISSIER :
+             * consulte uniquement ses journaux.
+             *
+             * ADMIN :
+             * consulte tous les journaux et
+             * peut exceptionnellement clôturer.
+             *
+             * RESPONSABLE :
+             * consulte tous les journaux
+             * en lecture seule.
+             */}
+            <Route
+              element={
+                <RoleRoute
+                  roles={[
+                    ROLES.ADMIN,
+                    ROLES.RESPONSABLE,
+                    ROLES.CAISSIER,
+                  ]}
+                />
+              }
+            >
+              <Route
+                path="/journaux-caisse"
+                element={
+                  <JournalCaisseListPage />
+                }
+              />
+
+              <Route
+                path="/journaux-caisse/:id"
+                element={
+                  <ViewJournalCaissePage />
                 }
               />
             </Route>
