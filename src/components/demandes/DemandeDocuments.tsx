@@ -81,6 +81,7 @@ import {
 interface Props {
   demandeId: string;
   demandeStatut: StatutDemande;
+  documentsLocked: boolean;
   documents: DemandeDocument[];
   loading: boolean;
   error: boolean;
@@ -125,6 +126,7 @@ function getErrorMessage(
 function DemandeDocuments({
   demandeId,
   demandeStatut,
+  documentsLocked,
   documents,
   loading,
   error,
@@ -152,6 +154,7 @@ function DemandeDocuments({
    * que la demande est EN_ATTENTE.
    */
   const canUploadDocuments =
+    !documentsLocked &&
     demandeStatut ===
       StatutDemande.EN_ATTENTE &&
     (
@@ -178,6 +181,7 @@ function DemandeDocuments({
    * la transmission de la demande.
    */
   const canDeleteDocuments =
+    !documentsLocked &&
     demandeStatut ===
       StatutDemande.EN_ATTENTE &&
     (
@@ -290,6 +294,14 @@ function DemandeDocuments({
   };
 
   const handleOpenUploadDialog = () => {
+    if (documentsLocked) {
+      toast.error(
+        "Les pièces justificatives d’une demande déjà payée ne peuvent plus être modifiées."
+      );
+
+      return;
+    }
+
     if (!canUploadDocuments) {
       toast.error(
         "Les documents peuvent uniquement être ajoutés par l’agent avant la transmission de la demande."
@@ -302,6 +314,14 @@ function DemandeDocuments({
   };
 
   const handleUpload = async () => {
+    if (documentsLocked) {
+      toast.error(
+        "Les pièces justificatives d’une demande déjà payée ne peuvent plus être modifiées."
+      );
+
+      return;
+    }
+
     if (!canUploadDocuments) {
       toast.error(
         "Vous n’êtes pas autorisé à ajouter un document à cette demande."
@@ -599,6 +619,14 @@ function DemandeDocuments({
   const openDeleteDialog = (
     documentItem: DemandeDocument
   ) => {
+    if (documentsLocked) {
+      toast.error(
+        "Les pièces justificatives d’une demande déjà payée ne peuvent plus être modifiées."
+      );
+
+      return;
+    }
+
     if (!canDeleteDocuments) {
       toast.error(
         "Les documents peuvent uniquement être supprimés par l’agent avant la transmission de la demande."
@@ -621,6 +649,14 @@ function DemandeDocuments({
   };
 
   const handleDelete = async () => {
+    if (documentsLocked) {
+      toast.error(
+        "Les pièces justificatives d’une demande déjà payée ne peuvent plus être modifiées."
+      );
+
+      return;
+    }
+
     if (!canDeleteDocuments) {
       toast.error(
         "Vous n’êtes pas autorisé à supprimer ce document."
@@ -754,6 +790,20 @@ function DemandeDocuments({
           )}
         </Stack>
 
+        {documentsLocked &&
+          !demandeTerminee && (
+            <Alert
+              severity="warning"
+              sx={{ mb: 3 }}
+            >
+              Le paiement a déjà été enregistré.
+              Les pièces justificatives sont
+              désormais verrouillées et ne peuvent
+              plus être ajoutées, remplacées ou
+              supprimées.
+            </Alert>
+          )}
+
         {demandeTerminee && (
           <Alert
             severity="info"
@@ -766,6 +816,7 @@ function DemandeDocuments({
         )}
 
         {!demandeTerminee &&
+          !documentsLocked &&
           isAgent &&
           demandeStatut ===
             StatutDemande.EN_ATTENTE && (

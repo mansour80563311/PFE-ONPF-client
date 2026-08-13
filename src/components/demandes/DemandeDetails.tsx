@@ -5,6 +5,7 @@ import {
   Chip,
   Divider,
   Paper,
+  Stack,
   Typography,
 } from "@mui/material";
 
@@ -15,6 +16,8 @@ import LockClockRoundedIcon from "@mui/icons-material/LockClockRounded";
 import NotesRoundedIcon from "@mui/icons-material/NotesRounded";
 import ErrorOutlineRoundedIcon from "@mui/icons-material/ErrorOutlineRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
+import RequestQuoteRoundedIcon from "@mui/icons-material/RequestQuoteRounded";
+import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
 
 import {
   Link,
@@ -23,6 +26,11 @@ import {
 import type {
   ReactNode,
 } from "react";
+
+import {
+  NatureDemande,
+  StatutTarification,
+} from "../../types/demande";
 
 import type {
   Demande,
@@ -168,6 +176,45 @@ function DetailItem({
   );
 }
 
+function formatMontant(
+  value:
+    | string
+    | number
+): string {
+  const montant =
+    Number(value);
+
+  if (
+    !Number.isFinite(
+      montant
+    )
+  ) {
+    return "0,000 DT";
+  }
+
+  return `${montant
+    .toFixed(3)
+    .replace(".", ",")} DT`;
+}
+
+function getLangueLabel(
+  langue?: string | null
+): string {
+  switch (langue) {
+    case "FRANCAIS":
+      return "Français";
+
+    case "ARABE":
+      return "Arabe";
+
+    case "ANGLAIS":
+      return "Anglais";
+
+    default:
+      return "Non renseignée";
+  }
+}
+
 function DemandeDetails({
   demande,
 }: Props) {
@@ -178,6 +225,36 @@ function DemandeDetails({
   const canOpenJournal =
     user?.role === ROLES.ADMIN ||
     user?.role === ROLES.RESPONSABLE;
+
+  const isLegacy =
+    demande.nature == null;
+
+  const isInscription =
+    demande.nature ===
+    NatureDemande.INSCRIPTION;
+
+  const isPrestation =
+    demande.nature ===
+    NatureDemande.PRESTATION;
+
+  const titreFoncier =
+    demande.titreFoncier;
+
+  const tarification =
+    demande.tarification;
+
+  const languePrestation =
+    tarification?.langue ??
+    (
+      isPrestation
+        ? demande.langueCertificat
+        : null
+    );
+
+  const nombrePages =
+    tarification?.nombrePages ??
+    demande.nombrePages ??
+    null;
 
   return (
     <Paper
@@ -394,37 +471,389 @@ function DemandeDetails({
 
       <Divider sx={{ my: 4 }} />
 
-      {/* Informations foncières */}
+      {/* Informations métier */}
 
-      <SectionHeader
-        icon={<HomeWorkRoundedIcon />}
-        title="Informations foncières"
-        subtitle="Référence et localisation du bien concerné par la demande."
-      />
+      {isLegacy && (
+        <>
+          <SectionHeader
+            icon={<HomeWorkRoundedIcon />}
+            title="Informations foncières"
+            subtitle="Informations historiques de la demande créée avec l’ancien modèle."
+          />
 
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: {
-            xs: "1fr",
-            md: "repeat(2, minmax(0, 1fr))",
-          },
-          columnGap: 4,
-          rowGap: 3,
-        }}
-      >
-        <DetailItem
-          label="Référence foncière"
-          value={
-            demande.referenceFonciere
-          }
-        />
+          <Alert
+            severity="info"
+            variant="outlined"
+            sx={{
+              mb: 3,
+            }}
+          >
+            Cette demande utilise l’ancien modèle de données. La référence foncière historique est conservée pour assurer la compatibilité.
+          </Alert>
 
-        <DetailItem
-          label="Adresse du bien"
-          value={demande.adresseBien}
-        />
-      </Box>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "repeat(2, minmax(0, 1fr))",
+              },
+              columnGap: 4,
+              rowGap: 3,
+            }}
+          >
+            <DetailItem
+              label="Référence foncière"
+              value={
+                demande.referenceFonciere ||
+                "Non renseignée"
+              }
+            />
+
+            <DetailItem
+              label="Adresse du bien"
+              value={demande.adresseBien}
+            />
+          </Box>
+        </>
+      )}
+
+      {isInscription && (
+        <>
+          <SectionHeader
+            icon={<HomeWorkRoundedIcon />}
+            title="Informations foncières"
+            subtitle="Titre foncier et opérations faisant l’objet de la demande d’inscription."
+          />
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "repeat(2, minmax(0, 1fr))",
+              },
+              columnGap: 4,
+              rowGap: 3,
+            }}
+          >
+            <DetailItem
+              label="Nature"
+              value="Inscription foncière"
+            />
+
+            <DetailItem
+              label="Numéro du titre foncier"
+              value={
+                titreFoncier?.numero ??
+                "Non renseigné"
+              }
+            />
+
+            <DetailItem
+              label="Gouvernorat"
+              value={
+                titreFoncier
+                  ?.gouvernorat
+                  ?.nom ??
+                "Non renseigné"
+              }
+            />
+
+            <DetailItem
+              label="Adresse du bien"
+              value={demande.adresseBien}
+            />
+
+            <DetailItem
+              label="Opération(s) foncière(s)"
+              fullWidth
+              value={
+                demande.operationsFoncieres &&
+                demande.operationsFoncieres.length > 0
+                  ? (
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  useFlexGap
+                  sx={{
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {demande.operationsFoncieres?.map(
+                    (operation) => (
+                      <Chip
+                        key={operation.id}
+                        label={
+                          operation
+                            .typeOperationFonciere
+                            .libelle
+                        }
+                        size="small"
+                        variant="outlined"
+                      />
+                    )
+                  )}
+                </Stack>
+                    )
+                  : "Aucune opération renseignée"
+              }
+            />
+          </Box>
+        </>
+      )}
+
+      {isPrestation && (
+        <>
+          <SectionHeader
+            icon={<RequestQuoteRoundedIcon />}
+            title="Informations de la prestation"
+            subtitle="Nature de la prestation et paramètres utilisés pour son traitement."
+          />
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "repeat(2, minmax(0, 1fr))",
+              },
+              columnGap: 4,
+              rowGap: 3,
+            }}
+          >
+            <DetailItem
+              label="Nature"
+              value="Prestation"
+            />
+
+            <DetailItem
+              label="Prestation"
+              value={
+                demande.prestation?.libelle ??
+                tarification?.prestationLibelle ??
+                "Non renseignée"
+              }
+            />
+
+            <DetailItem
+              label="Langue"
+              value={
+                getLangueLabel(
+                  languePrestation
+                )
+              }
+            />
+
+            {nombrePages !== null && (
+              <DetailItem
+                label="Nombre de pages"
+                value={nombrePages}
+              />
+            )}
+
+            {titreFoncier && (
+              <>
+                <DetailItem
+                  label="Numéro du titre foncier"
+                  value={titreFoncier.numero}
+                />
+
+                <DetailItem
+                  label="Gouvernorat"
+                  value={
+                    titreFoncier
+                      .gouvernorat
+                      .nom
+                  }
+                />
+              </>
+            )}
+
+            <DetailItem
+              label="Adresse du bien"
+              value={demande.adresseBien}
+              fullWidth={
+                !titreFoncier
+              }
+            />
+          </Box>
+        </>
+      )}
+
+      {!isLegacy && (
+        <>
+          <Divider sx={{ my: 4 }} />
+
+          <SectionHeader
+            icon={<ReceiptLongRoundedIcon />}
+            title="Tarification réglementaire"
+            subtitle="Détail du calcul enregistré avec la demande."
+          />
+
+          {tarification ? (
+            <Paper
+              variant="outlined"
+              sx={{
+                overflow: "hidden",
+                borderColor: "divider",
+              }}
+            >
+              <Box
+                sx={{
+                  px: 2.5,
+                  py: 2,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 2,
+                  flexWrap: "wrap",
+                  bgcolor: "action.hover",
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontWeight: 800,
+                  }}
+                >
+                  Détail du calcul
+                </Typography>
+
+                <Chip
+                  size="small"
+                  color={
+                    tarification.statut ===
+                    StatutTarification.FIGEE
+                      ? "success"
+                      : "default"
+                  }
+                  label={
+                    tarification.statut ===
+                    StatutTarification.FIGEE
+                      ? "Tarification figée"
+                      : "Tarification calculée"
+                  }
+                />
+              </Box>
+
+              <Box
+                sx={{
+                  px: 2.5,
+                }}
+              >
+                {tarification.lignes
+                  .slice()
+                  .sort(
+                    (a, b) =>
+                      a.ordre - b.ordre
+                  )
+                  .map((ligne) => (
+                    <Box
+                      key={ligne.id}
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: {
+                          xs: "1fr",
+                          sm: "minmax(0, 1fr) auto",
+                        },
+                        gap: 1,
+                        py: 1.5,
+                        borderBottom: "1px solid",
+                        borderColor: "divider",
+                      }}
+                    >
+                      <Box>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: 700,
+                          }}
+                        >
+                          {ligne.libelle}
+                        </Typography>
+
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                        >
+                          Quantité : {ligne.quantite} × {formatMontant(
+                            ligne.montantUnitaire
+                          )}
+                        </Typography>
+                      </Box>
+
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: 800,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {formatMontant(
+                          ligne.montant
+                        )}
+                      </Typography>
+                    </Box>
+                  ))}
+              </Box>
+
+              <Box
+                sx={{
+                  px: 2.5,
+                  py: 2,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 2,
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontWeight: 800,
+                  }}
+                >
+                  Montant total
+                </Typography>
+
+                <Typography
+                  variant="h6"
+                  sx={{
+                    color: "primary.main",
+                    fontWeight: 900,
+                  }}
+                >
+                  {formatMontant(
+                    tarification.montantTotal
+                  )}
+                </Typography>
+              </Box>
+
+              {tarification.referenceReglementaire && (
+                <Box
+                  sx={{
+                    px: 2.5,
+                    pb: 2,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                  >
+                    Référence réglementaire : {tarification.referenceReglementaire}
+                  </Typography>
+                </Box>
+              )}
+            </Paper>
+          ) : (
+            <Alert
+              severity="warning"
+              variant="outlined"
+            >
+              La tarification réglementaire de cette demande n’est pas disponible.
+            </Alert>
+          )}
+        </>
+      )}
 
       <Divider sx={{ my: 4 }} />
 

@@ -229,6 +229,8 @@ function StandardDemandeView() {
     loadingDocuments,
     documentsError,
     reloadDocuments,
+    dossierDocumentaireComplet,
+    missingRequiredDocuments,
   } = useDemandeDocuments(
     id ?? ""
   );
@@ -257,8 +259,8 @@ function StandardDemandeView() {
   ] = useState(false);
 
   const [
-    paiementEffectue,
-    setPaiementEffectue,
+    paiementDetecte,
+    setPaiementDetecte,
   ] = useState(false);
 
   const [
@@ -272,7 +274,7 @@ function StandardDemandeView() {
         paiement:
           Paiement | null
       ) => {
-        setPaiementEffectue(
+        setPaiementDetecte(
           paiement?.statut ===
             StatutPaiement.PAYE
         );
@@ -524,6 +526,16 @@ function StandardDemandeView() {
       .statutVerificationCni ===
     StatutVerificationCni.VERIFIEE;
 
+  /**
+   * Le paiement peut être connu directement
+   * dans la demande ou être remonté par
+   * PaiementSection après son chargement.
+   */
+  const paiementEffectue =
+    demande.paiement?.statut ===
+      StatutPaiement.PAYE ||
+    paiementDetecte;
+
   const canManageTransmission =
     demande.statut ===
       StatutDemande.EN_ATTENTE &&
@@ -538,6 +550,9 @@ function StandardDemandeView() {
   const canTransmit =
     canManageTransmission &&
     isCniVerified &&
+    !loadingDocuments &&
+    !documentsError &&
+    dossierDocumentaireComplet &&
     paiementEffectue;
 
   const canVerifyStoredCni =
@@ -613,9 +628,15 @@ function StandardDemandeView() {
           >
             {!isCniVerified
               ? "Identité CNI non vérifiée"
-              : !paiementEffectue
-                ? "Paiement non effectué"
-                : "Transmettre au responsable"}
+              : loadingDocuments
+                ? "Vérification des pièces..."
+                : documentsError
+                  ? "Pièces indisponibles"
+                  : !dossierDocumentaireComplet
+                    ? "Pièces justificatives incomplètes"
+                    : !paiementEffectue
+                      ? "Paiement non effectué"
+                      : "Transmettre au responsable"}
           </Button>
         )}
 
@@ -787,6 +808,29 @@ function StandardDemandeView() {
 
       {canManageTransmission &&
         isCniVerified &&
+        !loadingDocuments &&
+        !documentsError &&
+        !dossierDocumentaireComplet && (
+          <Alert
+            severity="warning"
+            sx={{
+              mb: 3,
+            }}
+          >
+            Le dossier documentaire est incomplet.
+            Pièce(s) manquante(s) :{" "}
+            {missingRequiredDocuments.join(", ")}.
+            Ajoutez toutes les pièces obligatoires
+            avant le paiement et la transmission
+            au responsable.
+          </Alert>
+        )}
+
+      {canManageTransmission &&
+        isCniVerified &&
+        !loadingDocuments &&
+        !documentsError &&
+        dossierDocumentaireComplet &&
         !paiementEffectue && (
           <Alert
             severity="warning"
@@ -820,6 +864,9 @@ function StandardDemandeView() {
           }
           demandeStatut={
             demande.statut
+          }
+          documentsLocked={
+            paiementEffectue
           }
           documents={
             documents

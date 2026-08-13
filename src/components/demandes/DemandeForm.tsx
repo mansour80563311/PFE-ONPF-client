@@ -2,13 +2,16 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   Divider,
+  FormControl,
   FormControlLabel,
+  FormGroup,
+  FormHelperText,
   MenuItem,
   Paper,
   Stack,
-  Switch,
   TextField,
   Typography,
 } from "@mui/material";
@@ -20,17 +23,20 @@ import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import VerifiedUserRoundedIcon from "@mui/icons-material/VerifiedUserRounded";
 import RequestQuoteRoundedIcon from "@mui/icons-material/RequestQuoteRounded";
+import CategoryRoundedIcon from "@mui/icons-material/CategoryRounded";
 
 import axios from "axios";
 
 import {
   useEffect,
+  useMemo,
   useState,
 } from "react";
 
 import {
   Controller,
   useForm,
+  useWatch,
 } from "react-hook-form";
 
 import {
@@ -55,23 +61,38 @@ import type {
 
 import {
   LangueCertificat,
+  NatureDemande,
 } from "../../types/demande";
 
 import type {
+  CreateDemandeRequest,
   Demande,
-  LangueCertificat as LangueCertificatType,
+  Gouvernorat,
+  Prestation,
+  TarificationDemande,
+  TypeOperationFonciere,
+  UpdateDemandeRequest,
 } from "../../types/demande";
 
 import type {
   IdentiteCni,
 } from "../../types/cni";
 
+import type {
+  CalculTarification,
+  CalculTarificationRequest,
+} from "../../services/tarification.service";
+
 import demandeService from "../../services/demande.service";
 import cniService from "../../services/cni.service";
+import referentielService from "../../services/referentiel.service";
+import tarificationService from "../../services/tarification.service";
+
 
 interface Props {
   demande?: Demande;
 }
+
 
 interface ApiErrorResponse {
   message?: string;
@@ -81,29 +102,47 @@ interface ApiErrorResponse {
   }>;
 }
 
-/*
- * Tarification affichée dans le formulaire.
+
+/**
+ * ============================================================
+ * ANCIENNE TARIFICATION
+ * ============================================================
  *
- * Le backend recalcule toujours ces montants
- * avant d’enregistrer la demande.
+ * Ces constantes sont uniquement conservées pour l'affichage
+ * des anciennes demandes dont nature = null.
+ *
+ * Elles ne sont JAMAIS utilisées pour les nouvelles demandes.
  */
-const PRIX_UNITAIRE_CERTIFICAT =
+const LEGACY_PRIX_UNITAIRE_CERTIFICAT =
   30;
 
-const SUPPLEMENT_TRADUCTION =
+const LEGACY_SUPPLEMENT_TRADUCTION =
   40;
+
+const EMPTY_OPERATION_IDS:
+  string[] = [];
+
+
+/**
+ * ============================================================
+ * OUTILS
+ * ============================================================
+ */
 
 function getErrorMessage(
   error: unknown
 ): string {
-  if (axios.isAxiosError(error)) {
+  if (
+    axios.isAxiosError(error)
+  ) {
     const responseData =
       error.response?.data as
         | ApiErrorResponse
         | undefined;
 
     return (
-      responseData?.errors?.[0]
+      responseData
+        ?.errors?.[0]
         ?.message ??
       responseData?.message ??
       "Une erreur est survenue."
@@ -112,6 +151,7 @@ function getErrorMessage(
 
   return "Une erreur inattendue est survenue.";
 }
+
 
 function formatDateFr(
   value: string
@@ -133,13 +173,26 @@ function formatDateFr(
   return `${day}/${month}/${year}`;
 }
 
+
 function formatMontant(
-  value: number
+  value:
+    | string
+    | number
 ): string {
-  return `${value
+  const montant =
+    Number(value);
+
+  if (
+    !Number.isFinite(montant)
+  ) {
+    return "0,000 DT";
+  }
+
+  return `${montant
     .toFixed(3)
     .replace(".", ",")} DT`;
 }
+
 
 function DemandeForm({
   demande,
@@ -147,15 +200,24 @@ function DemandeForm({
   const navigate =
     useNavigate();
 
+
+  /**
+   * ==========================================================
+   * ETATS GENERAUX
+   * ==========================================================
+   */
+
   const [
     submitting,
     setSubmitting,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     verifyingCin,
     setVerifyingCin,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     identiteCni,
@@ -173,15 +235,120 @@ function DemandeForm({
       null
     );
 
+
+  /**
+   * ==========================================================
+   * REFERENTIELS
+   * ==========================================================
+   */
+
+
+  const [
+    gouvernorats,
+    setGouvernorats,
+  ] =
+    useState<Gouvernorat[]>(
+      []
+    );
+
+  const [
+    operationsFoncieres,
+    setOperationsFoncieres,
+  ] =
+    useState<
+      TypeOperationFonciere[]
+    >(
+      []
+    );
+
+  const [
+    prestations,
+    setPrestations,
+  ] =
+    useState<Prestation[]>(
+      []
+    );
+
+  const [
+    loadingReferentiels,
+    setLoadingReferentiels,
+  ] =
+    useState(true);
+
+  const [
+    referentielError,
+    setReferentielError,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+
+  /**
+   * ==========================================================
+   * TARIFICATION
+   * ==========================================================
+   */
+
+  const [
+    tarification,
+    setTarification,
+  ] =
+    useState<
+      CalculTarification | null
+    >(
+      null
+    );
+
+  const [
+    tarificationError,
+    setTarificationError,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+  const [
+    tarificationResultKey,
+    setTarificationResultKey,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+
+  /**
+   * ==========================================================
+   * MODE
+   * ==========================================================
+   */
+
   const isEditMode =
     Boolean(demande);
+
+  const isLegacy =
+    Boolean(
+      demande &&
+      demande.nature === null
+    );
+
+  const demandeVerrouillee =
+    Boolean(
+      demande?.paiement
+    );
+
+
+  /**
+   * ==========================================================
+   * REACT HOOK FORM
+   * ==========================================================
+   */
 
   const {
     control,
     register,
     handleSubmit,
     reset,
-    watch,
     setValue,
     trigger,
 
@@ -190,9 +357,10 @@ function DemandeForm({
     },
   } =
     useForm<DemandeFormData>({
-      resolver: zodResolver(
-        demandeSchema
-      ),
+      resolver:
+        zodResolver(
+          demandeSchema
+        ),
 
       mode: "onBlur",
 
@@ -203,7 +371,40 @@ function DemandeForm({
         telephone: "",
         email: "",
 
-        nombreExemplaires: 1,
+        nature:
+          NatureDemande.INSCRIPTION,
+
+        gouvernoratId: "",
+
+        numeroTitreFoncier:
+          "",
+
+        operationFonciereIds:
+          [],
+
+        prestationId: "",
+
+        nombrePages:
+          undefined,
+
+        langue:
+          LangueCertificat.ARABE,
+
+        prestationNecessiteTitreFoncier:
+          false,
+
+        prestationTarificationParPage:
+          false,
+
+        adresseBien: "",
+
+        /**
+         * Ancien modèle.
+         */
+        referenceFonciere: "",
+
+        nombreExemplaires:
+          1,
 
         langueCertificat:
           LangueCertificat.FRANCAIS,
@@ -211,62 +412,144 @@ function DemandeForm({
         traductionDemandee:
           false,
 
-        referenceFonciere: "",
-        adresseBien: "",
         observations: "",
       },
     });
 
+
+    /**
+     * ==========================================================
+     * VALEURS SURVEILLEES
+     * ==========================================================
+     *
+     * useWatch est utilisé à la place de watch() afin
+     * d'éviter les avertissements du React Compiler et
+     * de limiter les re-rendus inutiles.
+     */
+
   const observations =
-    watch("observations") ??
-    "";
+    useWatch({
+      control,
+      name: "observations",
+    }) ?? "";
 
   const cin =
-    watch("cin") ?? "";
+    useWatch({
+      control,
+      name: "cin",
+    }) ?? "";
+
+  const nature =
+    useWatch({
+      control,
+      name: "nature",
+      defaultValue:
+        NatureDemande.INSCRIPTION,
+    });
+
+  const operationFonciereIds =
+    useWatch({
+      control,
+      name: "operationFonciereIds",
+    }) ??
+    EMPTY_OPERATION_IDS;
+
+  const prestationId =
+    useWatch({
+      control,
+      name: "prestationId",
+    }) ?? "";
+
+  const nombrePages =
+    useWatch({
+      control,
+      name: "nombrePages",
+    });
+
+  const langue =
+    useWatch({
+      control,
+      name: "langue",
+    }) ??
+    LangueCertificat.ARABE;
 
   const nombreExemplaires =
-    watch(
-      "nombreExemplaires"
-    ) ?? 1;
-
-  const langueCertificat =
-    watch(
-      "langueCertificat"
-    );
+    useWatch({
+      control,
+      name: "nombreExemplaires",
+    }) ?? 1;
 
   const traductionDemandee =
-    watch(
-      "traductionDemandee"
-    ) ?? false;
+    useWatch({
+      control,
+      name: "traductionDemandee",
+    }) ?? false;
 
-  /*
-   * Protection de l’aperçu lorsque le champ
-   * numérique est momentanément vide.
+  /**
+   * ==========================================================
+   * PRESTATION SELECTIONNEE
+   * ==========================================================
    */
-  const nombreExemplairesValide =
-    Number.isFinite(
-      nombreExemplaires
-    ) &&
-    nombreExemplaires > 0
-      ? nombreExemplaires
-      : 0;
 
-  const supplementTraduction =
-    traductionDemandee
-      ? SUPPLEMENT_TRADUCTION
-      : 0;
+  const prestationSelectionnee =
+    useMemo(
+      () => {
+        if (
+          !prestationId
+        ) {
+          return null;
+        }
 
-  const montantTotalCalcule =
-    nombreExemplairesValide *
-      PRIX_UNITAIRE_CERTIFICAT +
-    supplementTraduction;
+        return (
+          prestations.find(
+            (item) =>
+              item.id ===
+              prestationId
+          ) ??
+          (
+            demande
+              ?.prestation
+              ?.id ===
+            prestationId
+              ? demande.prestation
+              : null
+          )
+        );
+      },
+      [
+        prestationId,
+        prestations,
+        demande,
+      ]
+    );
+
+
+  const afficherTitrePrestation =
+    Boolean(
+      prestationSelectionnee
+        ?.necessiteTitreFoncier
+    ) ||
+    Boolean(
+      isEditMode &&
+      demande?.titreFoncier
+    );
+
+
+  /**
+   * ==========================================================
+   * INFORMATIONS CNI A AFFICHER
+   * ==========================================================
+   */
 
   const dateNaissanceAffichee =
     identiteCni
       ?.dateNaissance ??
     demande
       ?.dateNaissanceDemandeur
-      ?.slice(0, 10) ??
+      ?.slice(
+        0,
+        10
+      ) ??
     "";
 
   const adresseOfficielleAffichee =
@@ -276,54 +559,698 @@ function DemandeForm({
       ?.adresseDemandeur ??
     "";
 
-  useEffect(() => {
-    if (!demande) {
-      return;
-    }
 
-    reset({
-      nomDemandeur:
-        demande.nomDemandeur,
+  /**
+   * ==========================================================
+   * CHARGEMENT DES REFERENTIELS
+   * ==========================================================
+   */
 
-      prenomDemandeur:
-        demande.prenomDemandeur,
+  useEffect(
+    () => {
+      /**
+       * Une ancienne demande n'a pas besoin
+       * des nouveaux référentiels.
+       */
+      if (
+        demande &&
+        demande.nature === null
+      ) {
+        return;
+      }
 
-      cin:
-        demande.cin,
+      let active =
+        true;
 
-      telephone:
-        demande.telephone,
+      const chargerReferentiels =
+        async () => {
+          try {
+            const [
+              gouvernoratsData,
+              operationsData,
+              prestationsData,
+            ] =
+              await Promise.all([
+                referentielService
+                  .getGouvernorats(),
 
-      email:
-        demande.email ?? "",
+                referentielService
+                  .getOperationsFoncieres(),
 
-      nombreExemplaires:
-        demande.nombreExemplaires,
+                referentielService
+                  .getPrestations(),
+              ]);
 
-      langueCertificat:
-        demande.langueCertificat,
+            if (
+              !active
+            ) {
+              return;
+            }
 
-      traductionDemandee:
-        demande.traductionDemandee,
+            setReferentielError(
+              null
+            );
 
-      referenceFonciere:
-        demande.referenceFonciere,
+            setGouvernorats(
+              gouvernoratsData
+            );
 
-      adresseBien:
-        demande.adresseBien,
+            setOperationsFoncieres(
+              operationsData
+            );
 
-      observations:
-        demande.observations ??
-        "",
-    });
-  }, [demande, reset]);
+            setPrestations(
+              prestationsData
+            );
+          } catch (
+            error
+          ) {
+            if (
+              !active
+            ) {
+              return;
+            }
+
+            const message =
+              getErrorMessage(
+                error
+              );
+
+            setReferentielError(
+              message
+            );
+
+            toast.error(
+              "Impossible de charger les référentiels."
+            );
+          } finally {
+            if (
+              active
+            ) {
+              setLoadingReferentiels(
+                false
+              );
+            }
+          }
+        };
+
+      void chargerReferentiels();
+
+      return () => {
+        active =
+          false;
+      };
+    },
+    [
+      demande,
+    ]
+  );
+
+
+  /**
+   * ==========================================================
+   * INITIALISATION EN MODE MODIFICATION
+   * ==========================================================
+   */
+
+  useEffect(
+    () => {
+      if (
+        !demande
+      ) {
+        return;
+      }
+
+      /**
+       * Ancienne demande.
+       */
+      if (
+        demande.nature ===
+        null
+      ) {
+        reset({
+          nomDemandeur:
+            demande.nomDemandeur,
+
+          prenomDemandeur:
+            demande.prenomDemandeur,
+
+          cin:
+            demande.cin,
+
+          telephone:
+            demande.telephone,
+
+          email:
+            demande.email ??
+            "",
+
+          nature:
+            null,
+
+          gouvernoratId:
+            "",
+
+          numeroTitreFoncier:
+            "",
+
+          operationFonciereIds:
+            [],
+
+          prestationId:
+            "",
+
+          nombrePages:
+            undefined,
+
+          langue:
+            LangueCertificat.ARABE,
+
+          prestationNecessiteTitreFoncier:
+            false,
+
+          prestationTarificationParPage:
+            false,
+
+          adresseBien:
+            demande.adresseBien,
+
+          referenceFonciere:
+            demande.referenceFonciere,
+
+          nombreExemplaires:
+            demande.nombreExemplaires,
+
+          langueCertificat:
+            demande.langueCertificat,
+
+          traductionDemandee:
+            demande.traductionDemandee,
+
+          observations:
+            demande.observations ??
+            "",
+        });
+
+        return;
+      }
+
+
+      /**
+       * Nouvelle structure.
+       */
+      const languePrestation =
+        demande
+          .tarification
+          ?.langue ??
+        (
+          demande
+            .langueCertificat ===
+            LangueCertificat
+              .FRANCAIS ||
+          demande
+            .langueCertificat ===
+            LangueCertificat
+              .ARABE
+            ? demande
+                .langueCertificat
+            : LangueCertificat
+                .ARABE
+        );
+
+
+      reset({
+        nomDemandeur:
+          demande.nomDemandeur,
+
+        prenomDemandeur:
+          demande.prenomDemandeur,
+
+        cin:
+          demande.cin,
+
+        telephone:
+          demande.telephone,
+
+        email:
+          demande.email ??
+          "",
+
+        nature:
+          demande.nature,
+
+        gouvernoratId:
+          demande
+            .titreFoncier
+            ?.gouvernoratId ??
+          "",
+
+        numeroTitreFoncier:
+          demande
+            .titreFoncier
+            ?.numero ??
+          "",
+
+        operationFonciereIds:
+          demande
+            .operationsFoncieres
+            ?.map(
+              (item) =>
+                item
+                  .typeOperationFonciereId
+            ) ??
+          [],
+
+        prestationId:
+          demande
+            .prestationId ??
+          "",
+
+        nombrePages:
+          demande
+            .nombrePages ??
+          undefined,
+
+        langue:
+          languePrestation,
+
+        prestationNecessiteTitreFoncier:
+          demande
+            .prestation
+            ?.necessiteTitreFoncier ??
+          false,
+
+        prestationTarificationParPage:
+          demande
+            .prestation
+            ?.tarificationParPage ??
+          false,
+
+        adresseBien:
+          demande.adresseBien,
+
+        /**
+         * Legacy conservé uniquement
+         * dans les valeurs du formulaire.
+         */
+        referenceFonciere:
+          demande.referenceFonciere,
+
+        nombreExemplaires:
+          demande.nombreExemplaires,
+
+        langueCertificat:
+          demande.langueCertificat,
+
+        traductionDemandee:
+          demande.traductionDemandee,
+
+        observations:
+          demande.observations ??
+          "",
+      });
+    },
+    [
+      demande,
+      reset,
+    ]
+  );
+
+
+  /**
+   * ==========================================================
+   * SYNCHRONISATION DES REGLES DE PRESTATION
+   * ==========================================================
+   */
+
+  useEffect(
+    () => {
+      if (
+        nature !==
+          NatureDemande.PRESTATION ||
+        !prestationSelectionnee
+      ) {
+        return;
+      }
+
+      setValue(
+        "prestationNecessiteTitreFoncier",
+        prestationSelectionnee
+          .necessiteTitreFoncier,
+        {
+          shouldValidate:
+            false,
+        }
+      );
+
+      setValue(
+        "prestationTarificationParPage",
+        prestationSelectionnee
+          .tarificationParPage,
+        {
+          shouldValidate:
+            false,
+        }
+      );
+    },
+    [
+      nature,
+      prestationSelectionnee,
+      setValue,
+    ]
+  );
+
+
+  /**
+   * ==========================================================
+   * REQUETE TARIFAIRE COURANTE
+   * ==========================================================
+   *
+   * La requête est dérivée des valeurs du formulaire.
+   * Aucun setState n'est nécessaire ici.
+   */
+
+  const tarificationRequest =
+    useMemo<
+      CalculTarificationRequest | null
+    >(
+      () => {
+        /**
+         * Ancienne demande ou demande payée :
+         * aucun nouveau calcul.
+         */
+        if (
+          nature === null ||
+          isLegacy ||
+          demandeVerrouillee
+        ) {
+          return null;
+        }
+
+
+        /**
+         * INSCRIPTION
+         */
+        if (
+          nature ===
+          NatureDemande.INSCRIPTION
+        ) {
+          if (
+            operationFonciereIds
+              .length === 0
+          ) {
+            return null;
+          }
+
+          return {
+            nature:
+              NatureDemande
+                .INSCRIPTION,
+
+            operationFonciereIds,
+          };
+        }
+
+
+        /**
+         * PRESTATION
+         */
+        if (
+          nature ===
+          NatureDemande.PRESTATION
+        ) {
+          if (
+            !prestationId ||
+            !langue
+          ) {
+            return null;
+          }
+
+
+          if (
+            prestationSelectionnee
+              ?.tarificationParPage &&
+            (
+              !nombrePages ||
+              nombrePages < 1
+            )
+          ) {
+            return null;
+          }
+
+
+          return {
+            nature:
+              NatureDemande
+                .PRESTATION,
+
+            prestationId,
+
+            langue,
+
+            ...(prestationSelectionnee
+              ?.tarificationParPage &&
+            nombrePages
+              ? {
+                  nombrePages,
+                }
+              : {}),
+          };
+        }
+
+
+        return null;
+      },
+      [
+        nature,
+        isLegacy,
+        demandeVerrouillee,
+        operationFonciereIds,
+        prestationId,
+        langue,
+        nombrePages,
+        prestationSelectionnee,
+      ]
+    );
+
+
+  /**
+   * Clé représentant exactement les paramètres
+   * utilisés pour le calcul.
+   *
+   * Elle empêche l'affichage d'un ancien tarif
+   * lorsque l'utilisateur modifie le formulaire.
+   */
+  const tarificationRequestKey =
+    useMemo(
+      () =>
+        tarificationRequest
+          ? JSON.stringify(
+              tarificationRequest
+            )
+          : null,
+      [
+        tarificationRequest,
+      ]
+    );
+
+
+  /**
+   * ==========================================================
+   * CALCUL TARIFAIRE AUTOMATIQUE
+   * ==========================================================
+   */
+
+  useEffect(
+    () => {
+      if (
+        !tarificationRequest ||
+        !tarificationRequestKey
+      ) {
+        return;
+      }
+
+
+      let active =
+        true;
+
+
+      /**
+       * Délai de 350 ms afin d'éviter
+       * les appels excessifs à l'API.
+       */
+      const timeoutId =
+        window.setTimeout(
+          () => {
+            const calculer =
+              async () => {
+                try {
+                  const result =
+                    await tarificationService
+                      .calculer(
+                        tarificationRequest
+                      );
+
+                  if (
+                    !active
+                  ) {
+                    return;
+                  }
+
+
+                  setTarification(
+                    result
+                  );
+
+                  setTarificationError(
+                    null
+                  );
+
+                  setTarificationResultKey(
+                    tarificationRequestKey
+                  );
+                } catch (
+                  error
+                ) {
+                  if (
+                    !active
+                  ) {
+                    return;
+                  }
+
+
+                  setTarification(
+                    null
+                  );
+
+                  setTarificationError(
+                    getErrorMessage(
+                      error
+                    )
+                  );
+
+                  setTarificationResultKey(
+                    tarificationRequestKey
+                  );
+                }
+              };
+
+
+            void calculer();
+          },
+          350
+        );
+
+
+      return () => {
+        active =
+          false;
+
+        window.clearTimeout(
+          timeoutId
+        );
+      };
+    },
+    [
+      tarificationRequest,
+      tarificationRequestKey,
+    ]
+  );
+
+
+  /**
+   * ==========================================================
+   * ETAT DU CALCUL TARIFAIRE
+   * ==========================================================
+   */
+
+  const tarificationEnCours =
+    Boolean(
+      tarificationRequestKey &&
+      tarificationResultKey !==
+        tarificationRequestKey
+    );
+
+
+  const tarificationErrorAffichee =
+    tarificationRequestKey &&
+    tarificationResultKey ===
+      tarificationRequestKey
+      ? tarificationError
+      : null;
+
+
+  const tarificationCalculeeCourante =
+    tarificationRequestKey &&
+    tarificationResultKey ===
+      tarificationRequestKey
+      ? tarification
+      : null;
+
+
+  /**
+   * ==========================================================
+   * TARIFICATION A AFFICHER
+   * ==========================================================
+   */
+
+  const tarificationAffichee:
+    | CalculTarification
+    | TarificationDemande
+    | null =
+      demandeVerrouillee
+        ? demande
+            ?.tarification ??
+          null
+        : tarificationCalculeeCourante;
+
+
+  /**
+   * ==========================================================
+   * ANCIEN CALCUL
+   * ==========================================================
+   */
+
+  const nombreExemplairesValide:
+    number =
+      typeof nombreExemplaires ===
+        "number" &&
+      Number.isFinite(
+        nombreExemplaires
+      ) &&
+      nombreExemplaires > 0
+        ? nombreExemplaires
+        : 0;
+
+  const legacySupplement =
+    traductionDemandee
+      ? LEGACY_SUPPLEMENT_TRADUCTION
+      : 0;
+
+  const legacyMontantTotal =
+    nombreExemplairesValide *
+      LEGACY_PRIX_UNITAIRE_CERTIFICAT +
+    legacySupplement;
+
+
+  /**
+   * ==========================================================
+   * HANDLER CIN
+   * ==========================================================
+   */
 
   const handleCinChange =
     () => {
-      if (identiteCni) {
-        setIdentiteCni(null);
+      if (
+        identiteCni
+      ) {
+        setIdentiteCni(
+          null
+        );
 
-        if (!demande) {
+        if (
+          !demande
+        ) {
           setValue(
             "nomDemandeur",
             "",
@@ -350,17 +1277,26 @@ function DemandeForm({
         }
       }
 
-      if (cniError) {
-        setCniError(null);
+      if (
+        cniError
+      ) {
+        setCniError(
+          null
+        );
       }
     };
+
 
   const handleVerifyCin =
     async () => {
       const isCinValid =
-        await trigger("cin");
+        await trigger(
+          "cin"
+        );
 
-      if (!isCinValid) {
+      if (
+        !isCinValid
+      ) {
         return;
       }
 
@@ -369,12 +1305,15 @@ function DemandeForm({
           true
         );
 
-        setCniError(null);
+        setCniError(
+          null
+        );
 
         const identite =
           await cniService
             .verifierCni({
-              cin: cin.trim(),
+              cin:
+                cin.trim(),
             });
 
         setIdentiteCni(
@@ -408,7 +1347,9 @@ function DemandeForm({
         toast.success(
           "Identité vérifiée avec succès."
         );
-      } catch (error) {
+      } catch (
+        error
+      ) {
         const message =
           getErrorMessage(
             error
@@ -432,10 +1373,219 @@ function DemandeForm({
       }
     };
 
+
+  /**
+   * ==========================================================
+   * CHANGEMENT DE NATURE
+   * ==========================================================
+   */
+
+  const handleNatureChange =
+    (
+      value:
+        | typeof NatureDemande.INSCRIPTION
+        | typeof NatureDemande.PRESTATION
+    ) => {
+      setValue(
+        "nature",
+        value,
+        {
+          shouldDirty:
+            true,
+
+          shouldValidate:
+            true,
+        }
+      );
+
+      setTarification(
+        null
+      );
+
+      setTarificationError(
+        null
+      );
+
+
+      if (
+        value ===
+        NatureDemande.INSCRIPTION
+      ) {
+        setValue(
+          "prestationId",
+          "",
+          {
+            shouldDirty:
+              true,
+          }
+        );
+
+        setValue(
+          "nombrePages",
+          undefined,
+          {
+            shouldDirty:
+              true,
+          }
+        );
+
+        setValue(
+          "prestationNecessiteTitreFoncier",
+          false
+        );
+
+        setValue(
+          "prestationTarificationParPage",
+          false
+        );
+      } else {
+        setValue(
+          "operationFonciereIds",
+          [],
+          {
+            shouldDirty:
+              true,
+          }
+        );
+      }
+    };
+
+
+  /**
+   * ==========================================================
+   * CHANGEMENT DE PRESTATION
+   * ==========================================================
+   */
+
+  const handlePrestationChange =
+    (
+      value: string
+    ) => {
+      setValue(
+        "prestationId",
+        value,
+        {
+          shouldDirty:
+            true,
+
+          shouldValidate:
+            true,
+        }
+      );
+
+      const selected =
+        prestations.find(
+          (item) =>
+            item.id ===
+            value
+        );
+
+      setValue(
+        "prestationNecessiteTitreFoncier",
+        selected
+          ?.necessiteTitreFoncier ??
+          false,
+        {
+          shouldValidate:
+            true,
+        }
+      );
+
+      setValue(
+        "prestationTarificationParPage",
+        selected
+          ?.tarificationParPage ??
+          false,
+        {
+          shouldValidate:
+            true,
+        }
+      );
+
+
+      if (
+        !selected
+          ?.tarificationParPage
+      ) {
+        setValue(
+          "nombrePages",
+          undefined,
+          {
+            shouldDirty:
+              true,
+
+            shouldValidate:
+              true,
+          }
+        );
+      }
+
+
+      /**
+       * Lors d'une nouvelle demande, un service
+       * qui ne nécessite aucun titre ne conserve
+       * pas les valeurs éventuellement saisies
+       * auparavant.
+       *
+       * En modification, on ne les efface pas
+       * automatiquement car le backend ne
+       * déconnecte pas encore un ancien titre.
+       */
+      if (
+        !selected
+          ?.necessiteTitreFoncier &&
+        !isEditMode
+      ) {
+        setValue(
+          "gouvernoratId",
+          "",
+          {
+            shouldDirty:
+              true,
+
+            shouldValidate:
+              true,
+          }
+        );
+
+        setValue(
+          "numeroTitreFoncier",
+          "",
+          {
+            shouldDirty:
+              true,
+
+            shouldValidate:
+              true,
+          }
+        );
+      }
+
+      setTarification(
+        null
+      );
+
+      setTarificationError(
+        null
+      );
+    };
+
+
+  /**
+   * ==========================================================
+   * SOUMISSION
+   * ==========================================================
+   */
+
   const onSubmit =
     async (
-      data: DemandeFormData
+      data:
+        DemandeFormData
     ) => {
+      /**
+       * Une nouvelle demande doit obligatoirement
+       * avoir été vérifiée par le service CNI.
+       */
       if (
         !demande &&
         !identiteCni
@@ -447,39 +1597,369 @@ function DemandeForm({
         return;
       }
 
+
+      if (
+        demandeVerrouillee
+      ) {
+        toast.error(
+          "Une demande déjà payée ne peut plus être modifiée."
+        );
+
+        return;
+      }
+
+
       try {
         setSubmitting(
           true
         );
 
-        if (demande) {
+
+        /**
+         * Données communes.
+         */
+        const donneesCommunes =
+          {
+            nomDemandeur:
+              data
+                .nomDemandeur
+                .trim(),
+
+            prenomDemandeur:
+              data
+                .prenomDemandeur
+                .trim(),
+
+            cin:
+              data
+                .cin
+                .trim(),
+
+            telephone:
+              data
+                .telephone
+                .trim(),
+
+            ...(data.email
+              ?.trim()
+              ? {
+                  email:
+                    data.email
+                      .trim(),
+                }
+              : {}),
+
+            adresseBien:
+              data
+                .adresseBien
+                .trim(),
+
+            ...(data
+              .observations
+              ?.trim()
+              ? {
+                  observations:
+                    data
+                      .observations
+                      .trim(),
+                }
+              : {}),
+          };
+
+
+        /**
+         * ======================================================
+         * MODIFICATION D'UNE ANCIENNE DEMANDE
+         * ======================================================
+         */
+        if (
+          demande &&
+          demande.nature ===
+            null
+        ) {
+          if (
+            !data
+              .referenceFonciere ||
+            !data
+              .nombreExemplaires ||
+            !data
+              .langueCertificat
+          ) {
+            toast.error(
+              "Les informations de l’ancienne demande sont incomplètes."
+            );
+
+            return;
+          }
+
+          const payload:
+            UpdateDemandeRequest =
+            {
+              ...donneesCommunes,
+
+              referenceFonciere:
+                data
+                  .referenceFonciere
+                  .trim(),
+
+              nombreExemplaires:
+                data
+                  .nombreExemplaires,
+
+              langueCertificat:
+                data
+                  .langueCertificat,
+
+              traductionDemandee:
+                data
+                  .traductionDemandee ??
+                false,
+            };
+
           await demandeService
             .updateDemande(
               demande.id,
-              data
+              payload
             );
 
           toast.success(
             "Demande modifiée avec succès."
           );
-        } else {
-          await demandeService
-            .createDemande(
-              data
+
+          navigate(
+            "/demandes",
+            {
+              replace:
+                true,
+            }
+          );
+
+          return;
+        }
+
+
+        /**
+         * ======================================================
+         * INSCRIPTION
+         * ======================================================
+         */
+        if (
+          data.nature ===
+          NatureDemande.INSCRIPTION
+        ) {
+          const operations =
+            data
+              .operationFonciereIds ??
+            [];
+
+          if (
+            !data.gouvernoratId ||
+            !data
+              .numeroTitreFoncier
+              ?.trim() ||
+            operations.length ===
+              0
+          ) {
+            toast.error(
+              "Les informations foncières de l’inscription sont incomplètes."
             );
 
-          toast.success(
-            "Demande créée avec succès."
-          );
+            return;
+          }
+
+
+          if (
+            demande
+          ) {
+            const payload:
+              UpdateDemandeRequest =
+              {
+                ...donneesCommunes,
+
+                gouvernoratId:
+                  data
+                    .gouvernoratId,
+
+                numeroTitreFoncier:
+                  data
+                    .numeroTitreFoncier
+                    .trim(),
+
+                operationFonciereIds:
+                  operations,
+              };
+
+            await demandeService
+              .updateDemande(
+                demande.id,
+                payload
+              );
+
+            toast.success(
+              "Demande modifiée avec succès."
+            );
+          } else {
+            const payload:
+              CreateDemandeRequest =
+              {
+                ...donneesCommunes,
+
+                nature:
+                  NatureDemande
+                    .INSCRIPTION,
+
+                gouvernoratId:
+                  data
+                    .gouvernoratId,
+
+                numeroTitreFoncier:
+                  data
+                    .numeroTitreFoncier
+                    .trim(),
+
+                operationFonciereIds:
+                  operations,
+              };
+
+            await demandeService
+              .createDemande(
+                payload
+              );
+
+            toast.success(
+              "Demande créée avec succès."
+            );
+          }
         }
+
+
+        /**
+         * ======================================================
+         * PRESTATION
+         * ======================================================
+         */
+        if (
+          data.nature ===
+          NatureDemande.PRESTATION
+        ) {
+          if (
+            !data.prestationId ||
+            !data.langue
+          ) {
+            toast.error(
+              "Les informations de la prestation sont incomplètes."
+            );
+
+            return;
+          }
+
+
+          const titre =
+            data
+              .numeroTitreFoncier
+              ?.trim();
+
+          const titrePayload =
+            titre &&
+            data.gouvernoratId
+              ? {
+                  gouvernoratId:
+                    data
+                      .gouvernoratId,
+
+                  numeroTitreFoncier:
+                    titre,
+                }
+              : {};
+
+
+          if (
+            demande
+          ) {
+            const payload:
+              UpdateDemandeRequest =
+              {
+                ...donneesCommunes,
+
+                prestationId:
+                  data
+                    .prestationId,
+
+                langue:
+                  data.langue,
+
+                ...(data
+                  .nombrePages
+                  ? {
+                      nombrePages:
+                        data
+                          .nombrePages,
+                    }
+                  : {}),
+
+                ...titrePayload,
+              };
+
+            await demandeService
+              .updateDemande(
+                demande.id,
+                payload
+              );
+
+            toast.success(
+              "Demande modifiée avec succès."
+            );
+          } else {
+            const payload:
+              CreateDemandeRequest =
+              {
+                ...donneesCommunes,
+
+                nature:
+                  NatureDemande
+                    .PRESTATION,
+
+                prestationId:
+                  data
+                    .prestationId,
+
+                langue:
+                  data.langue,
+
+                ...(data
+                  .nombrePages
+                  ? {
+                      nombrePages:
+                        data
+                          .nombrePages,
+                    }
+                  : {}),
+
+                ...titrePayload,
+              };
+
+            await demandeService
+              .createDemande(
+                payload
+              );
+
+            toast.success(
+              "Demande créée avec succès."
+            );
+          }
+        }
+
 
         navigate(
           "/demandes",
           {
-            replace: true,
+            replace:
+              true,
           }
         );
-      } catch (error) {
+      } catch (
+        error
+      ) {
         toast.error(
           getErrorMessage(
             error
@@ -492,16 +1972,38 @@ function DemandeForm({
       }
     };
 
+
+  /**
+   * ==========================================================
+   * ETAT GENERAL DES CHAMPS
+   * ==========================================================
+   */
+
+  const fieldsDisabled =
+    submitting ||
+    verifyingCin ||
+    demandeVerrouillee;
+
+
+  /**
+   * ==========================================================
+   * AFFICHAGE
+   * ==========================================================
+   */
+
   return (
     <Paper
       component="form"
       noValidate
       variant="outlined"
-      onSubmit={handleSubmit(
-        onSubmit
-      )}
+      onSubmit={
+        handleSubmit(
+          onSubmit
+        )
+      }
       sx={{
-        width: "100%",
+        width:
+          "100%",
 
         p: {
           xs: 2.5,
@@ -515,7 +2017,7 @@ function DemandeForm({
       <Alert
         severity="info"
         sx={{
-          mb: 4,
+          mb: 3,
         }}
       >
         Les champs marqués
@@ -527,14 +2029,49 @@ function DemandeForm({
         dossier.
       </Alert>
 
-      {/* Identité du demandeur */}
+
+      {demandeVerrouillee && (
+        <Alert
+          severity="warning"
+          sx={{
+            mb: 3,
+          }}
+        >
+          Cette demande a déjà
+          été payée. Ses
+          informations et sa
+          tarification sont
+          désormais verrouillées.
+        </Alert>
+      )}
+
+
+      {referentielError && (
+        <Alert
+          severity="error"
+          sx={{
+            mb: 3,
+          }}
+        >
+          {referentielError}
+        </Alert>
+      )}
+
+
+      {/* ===================================================== */}
+      {/* IDENTITE DU DEMANDEUR */}
+      {/* ===================================================== */}
 
       <Box
         sx={{
-          display: "flex",
+          display:
+            "flex",
+
           alignItems:
             "flex-start",
+
           gap: 1.5,
+
           mb: 3,
         }}
       >
@@ -542,15 +2079,25 @@ function DemandeForm({
           sx={{
             width: 44,
             height: 44,
-            flexShrink: 0,
-            display: "flex",
+
+            flexShrink:
+              0,
+
+            display:
+              "flex",
+
             alignItems:
               "center",
+
             justifyContent:
               "center",
-            borderRadius: 2.5,
+
+            borderRadius:
+              2.5,
+
             color:
               "primary.main",
+
             bgcolor:
               "rgba(10, 74, 70, 0.10)",
           }}
@@ -562,11 +2109,11 @@ function DemandeForm({
           <Typography
             variant="h6"
             sx={{
-              fontWeight: 700,
+              fontWeight:
+                700,
             }}
           >
-            Informations du
-            demandeur
+            Informations du demandeur
           </Typography>
 
           <Typography
@@ -581,21 +2128,24 @@ function DemandeForm({
         </Box>
       </Box>
 
+
       <Box
         sx={{
-          display: "grid",
+          display:
+            "grid",
 
           gridTemplateColumns:
             {
               xs: "1fr",
 
-              md: "repeat(2, minmax(0, 1fr))",
+              md:
+                "repeat(2, minmax(0, 1fr))",
             },
 
           gap: 2.5,
         }}
       >
-        {/* Vérification CIN */}
+        {/* CIN */}
 
         <Box
           sx={{
@@ -607,13 +2157,15 @@ function DemandeForm({
         >
           <Box
             sx={{
-              display: "grid",
+              display:
+                "grid",
 
               gridTemplateColumns:
                 {
                   xs: "1fr",
 
-                  sm: "minmax(0, 1fr) auto",
+                  sm:
+                    "minmax(0, 1fr) auto",
                 },
 
               gap: 1.5,
@@ -625,16 +2177,19 @@ function DemandeForm({
             <TextField
               required
               fullWidth
-              autoFocus
+              autoFocus={
+                !isEditMode
+              }
               label="Numéro de la CIN"
               placeholder="Ex. 12345678"
               disabled={
-                submitting ||
-                verifyingCin
+                fieldsDisabled
               }
-              error={Boolean(
-                errors.cin
-              )}
+              error={
+                Boolean(
+                  errors.cin
+                )
+              }
               helperText={
                 errors.cin
                   ?.message ??
@@ -645,7 +2200,8 @@ function DemandeForm({
                   inputMode:
                     "numeric",
 
-                  maxLength: 8,
+                  maxLength:
+                    8,
                 },
               }}
               {...register(
@@ -661,24 +2217,29 @@ function DemandeForm({
               type="button"
               variant="outlined"
               startIcon={
-                verifyingCin ? (
-                  <CircularProgress
-                    size={18}
-                    color="inherit"
-                  />
-                ) : (
-                  <VerifiedUserRoundedIcon />
-                )
+                verifyingCin
+                  ? (
+                      <CircularProgress
+                        size={
+                          18
+                        }
+                        color="inherit"
+                      />
+                    )
+                  : (
+                      <VerifiedUserRoundedIcon />
+                    )
               }
               disabled={
-                submitting ||
-                verifyingCin
+                fieldsDisabled
               }
               onClick={() => {
                 void handleVerifyCin();
               }}
               sx={{
-                minHeight: 56,
+                minHeight:
+                  56,
+
                 whiteSpace:
                   "nowrap",
               }}
@@ -691,6 +2252,7 @@ function DemandeForm({
             </Button>
           </Box>
 
+
           {cniError && (
             <Alert
               severity="error"
@@ -701,6 +2263,7 @@ function DemandeForm({
               {cniError}
             </Alert>
           )}
+
 
           {identiteCni && (
             <Alert
@@ -721,16 +2284,14 @@ function DemandeForm({
                   mb: 0.5,
                 }}
               >
-                Identité
-                confirmée par
-                le service CNI
+                Identité confirmée
+                par le service CNI
               </Typography>
 
               <Typography
                 variant="body2"
               >
-                Date de
-                naissance :{" "}
+                Date de naissance :{" "}
                 {formatDateFr(
                   identiteCni
                     .dateNaissance
@@ -740,8 +2301,7 @@ function DemandeForm({
               <Typography
                 variant="body2"
               >
-                Adresse
-                officielle :{" "}
+                Adresse officielle :{" "}
                 {
                   identiteCni
                     .adresse
@@ -751,8 +2311,7 @@ function DemandeForm({
               <Typography
                 variant="body2"
               >
-                Référence de
-                vérification :{" "}
+                Référence de vérification :{" "}
                 {
                   identiteCni
                     .referenceVerification
@@ -762,6 +2321,7 @@ function DemandeForm({
           )}
         </Box>
 
+
         <TextField
           required
           fullWidth
@@ -769,22 +2329,28 @@ function DemandeForm({
           placeholder="Ex. Mansour"
           autoComplete="family-name"
           disabled={
-            submitting ||
-            verifyingCin
+            fieldsDisabled
           }
-          error={Boolean(
-            errors.nomDemandeur
-          )}
+          error={
+            Boolean(
+              errors
+                .nomDemandeur
+            )
+          }
           helperText={
-            errors.nomDemandeur
+            errors
+              .nomDemandeur
               ?.message ??
-            (identiteCni
-              ? "Renseigné automatiquement par le service CNI."
-              : undefined)
+            (
+              identiteCni
+                ? "Renseigné automatiquement par le service CNI."
+                : undefined
+            )
           }
           slotProps={{
             inputLabel: {
-              shrink: true,
+              shrink:
+                true,
             },
 
             htmlInput: {
@@ -799,6 +2365,7 @@ function DemandeForm({
           )}
         />
 
+
         <TextField
           required
           fullWidth
@@ -806,22 +2373,28 @@ function DemandeForm({
           placeholder="Ex. Mohamed"
           autoComplete="given-name"
           disabled={
-            submitting ||
-            verifyingCin
+            fieldsDisabled
           }
-          error={Boolean(
-            errors.prenomDemandeur
-          )}
+          error={
+            Boolean(
+              errors
+                .prenomDemandeur
+            )
+          }
           helperText={
-            errors.prenomDemandeur
+            errors
+              .prenomDemandeur
               ?.message ??
-            (identiteCni
-              ? "Renseigné automatiquement par le service CNI."
-              : undefined)
+            (
+              identiteCni
+                ? "Renseigné automatiquement par le service CNI."
+                : undefined
+            )
           }
           slotProps={{
             inputLabel: {
-              shrink: true,
+              shrink:
+                true,
             },
 
             htmlInput: {
@@ -836,6 +2409,7 @@ function DemandeForm({
           )}
         />
 
+
         <TextField
           fullWidth
           type="date"
@@ -844,8 +2418,7 @@ function DemandeForm({
             dateNaissanceAffichee
           }
           disabled={
-            submitting ||
-            verifyingCin
+            fieldsDisabled
           }
           helperText={
             dateNaissanceAffichee
@@ -854,14 +2427,17 @@ function DemandeForm({
           }
           slotProps={{
             inputLabel: {
-              shrink: true,
+              shrink:
+                true,
             },
 
             htmlInput: {
-              readOnly: true,
+              readOnly:
+                true,
             },
           }}
         />
+
 
         <TextField
           fullWidth
@@ -871,8 +2447,7 @@ function DemandeForm({
           }
           placeholder="Adresse récupérée depuis le service CNI"
           disabled={
-            submitting ||
-            verifyingCin
+            fieldsDisabled
           }
           helperText={
             adresseOfficielleAffichee
@@ -881,14 +2456,17 @@ function DemandeForm({
           }
           slotProps={{
             inputLabel: {
-              shrink: true,
+              shrink:
+                true,
             },
 
             htmlInput: {
-              readOnly: true,
+              readOnly:
+                true,
             },
           }}
         />
+
 
         <TextField
           required
@@ -897,12 +2475,13 @@ function DemandeForm({
           placeholder="Ex. 20000000"
           autoComplete="tel"
           disabled={
-            submitting ||
-            verifyingCin
+            fieldsDisabled
           }
-          error={Boolean(
-            errors.telephone
-          )}
+          error={
+            Boolean(
+              errors.telephone
+            )
+          }
           helperText={
             errors.telephone
               ?.message
@@ -912,13 +2491,15 @@ function DemandeForm({
               inputMode:
                 "numeric",
 
-              maxLength: 8,
+              maxLength:
+                8,
             },
           }}
           {...register(
             "telephone"
           )}
         />
+
 
         <TextField
           fullWidth
@@ -927,12 +2508,13 @@ function DemandeForm({
           placeholder="Ex. nom@exemple.com"
           autoComplete="email"
           disabled={
-            submitting ||
-            verifyingCin
+            fieldsDisabled
           }
-          error={Boolean(
-            errors.email
-          )}
+          error={
+            Boolean(
+              errors.email
+            )
+          }
           helperText={
             errors.email
               ?.message ??
@@ -950,122 +2532,6 @@ function DemandeForm({
         />
       </Box>
 
-      <Divider
-        sx={{
-          my: 4,
-        }}
-      />
-
-      {/* Informations foncières */}
-
-      <Box
-        sx={{
-          display: "flex",
-          alignItems:
-            "flex-start",
-          gap: 1.5,
-          mb: 3,
-        }}
-      >
-        <Box
-          sx={{
-            width: 44,
-            height: 44,
-            flexShrink: 0,
-            display: "flex",
-            alignItems:
-              "center",
-            justifyContent:
-              "center",
-            borderRadius: 2.5,
-            color:
-              "primary.main",
-            bgcolor:
-              "rgba(10, 74, 70, 0.10)",
-          }}
-        >
-          <HomeWorkRoundedIcon />
-        </Box>
-
-        <Box>
-          <Typography
-            variant="h6"
-            sx={{
-              fontWeight: 700,
-            }}
-          >
-            Informations
-            foncières
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-          >
-            Identifiez le titre
-            foncier et la
-            localisation du bien
-            concerné.
-          </Typography>
-        </Box>
-      </Box>
-
-      <Box
-        sx={{
-          display: "grid",
-
-          gridTemplateColumns:
-            {
-              xs: "1fr",
-
-              md: "repeat(2, minmax(0, 1fr))",
-            },
-
-          gap: 2.5,
-        }}
-      >
-        <TextField
-          required
-          fullWidth
-          label="Référence foncière"
-          placeholder="Ex. RF-2026-001"
-          disabled={
-            submitting ||
-            verifyingCin
-          }
-          error={Boolean(
-            errors.referenceFonciere
-          )}
-          helperText={
-            errors.referenceFonciere
-              ?.message
-          }
-          {...register(
-            "referenceFonciere"
-          )}
-        />
-
-        <TextField
-          required
-          fullWidth
-          label="Adresse du bien"
-          placeholder="Gouvernorat, ville, localité..."
-          disabled={
-            submitting ||
-            verifyingCin
-          }
-          error={Boolean(
-            errors.adresseBien
-          )}
-          helperText={
-            errors.adresseBien
-              ?.message
-          }
-          {...register(
-            "adresseBien"
-          )}
-        />
-      </Box>
 
       <Divider
         sx={{
@@ -1073,351 +2539,1596 @@ function DemandeForm({
         }}
       />
 
-      {/* Paramètres du certificat */}
 
-      <Box
-        sx={{
-          display: "flex",
-          alignItems:
-            "flex-start",
-          gap: 1.5,
-          mb: 3,
-        }}
-      >
-        <Box
-          sx={{
-            width: 44,
-            height: 44,
-            flexShrink: 0,
-            display: "flex",
-            alignItems:
-              "center",
-            justifyContent:
-              "center",
-            borderRadius: 2.5,
-            color:
-              "primary.main",
-            bgcolor:
-              "rgba(10, 74, 70, 0.10)",
-          }}
-        >
-          <RequestQuoteRoundedIcon />
-        </Box>
+      {/* ===================================================== */}
+      {/* NATURE */}
+      {/* ===================================================== */}
 
-        <Box>
-          <Typography
-            variant="h6"
+      {!isLegacy && (
+        <>
+          <Box
             sx={{
-              fontWeight: 700,
+              display:
+                "flex",
+
+              alignItems:
+                "flex-start",
+
+              gap: 1.5,
+
+              mb: 3,
             }}
           >
-            Certificat et
-            tarification
-          </Typography>
+            <Box
+              sx={{
+                width: 44,
+                height: 44,
 
-          <Typography
-            variant="body2"
-            color="text.secondary"
-          >
-            Indiquez le nombre
-            d’exemplaires et la
-            langue souhaitée afin
-            de calculer le montant
-            à payer.
-          </Typography>
-        </Box>
-      </Box>
+                flexShrink:
+                  0,
 
-      <Box
-        sx={{
-          display: "grid",
+                display:
+                  "flex",
 
-          gridTemplateColumns:
-            {
-              xs: "1fr",
+                alignItems:
+                  "center",
 
-              md: "repeat(2, minmax(0, 1fr))",
-            },
+                justifyContent:
+                  "center",
 
-          gap: 2.5,
-        }}
-      >
-        <TextField
-          required
-          fullWidth
-          type="number"
-          label="Nombre d’exemplaires"
-          disabled={
-            submitting ||
-            verifyingCin
-          }
-          error={Boolean(
-            errors.nombreExemplaires
-          )}
-          helperText={
-            errors
-              .nombreExemplaires
-              ?.message ??
-            "Entre 1 et 20 exemplaires."
-          }
-          slotProps={{
-            htmlInput: {
-              min: 1,
-              max: 20,
-              step: 1,
-              inputMode:
-                "numeric",
-            },
-          }}
-          {...register(
-            "nombreExemplaires",
-            {
-              valueAsNumber:
-                true,
-            }
-          )}
-        />
+                borderRadius:
+                  2.5,
 
-        <Controller
-          name="langueCertificat"
-          control={control}
-          render={({
-            field,
-          }) => (
-            <TextField
-              {...field}
-              required
-              select
-              fullWidth
-              label="Langue du certificat"
-              disabled={
-                submitting ||
-                verifyingCin
-              }
-              error={Boolean(
-                errors
-                  .langueCertificat
-              )}
-              helperText={
-                errors
-                  .langueCertificat
-                  ?.message ??
-                "Le français est la langue de base."
-              }
-              onChange={(
-                event
-              ) => {
-                const value =
-                  event.target
-                    .value as
-                    LangueCertificatType;
+                color:
+                  "primary.main",
 
-                field.onChange(
-                  value
-                );
-
-                /*
-                 * Le français ne nécessite
-                 * jamais de traduction.
-                 */
-                if (
-                  value ===
-                  LangueCertificat.FRANCAIS
-                ) {
-                  setValue(
-                    "traductionDemandee",
-                    false,
-                    {
-                      shouldDirty:
-                        true,
-
-                      shouldValidate:
-                        true,
-                    }
-                  );
-                }
+                bgcolor:
+                  "rgba(10, 74, 70, 0.10)",
               }}
             >
-              <MenuItem
-                value={
-                  LangueCertificat.FRANCAIS
-                }
-              >
-                Français
-              </MenuItem>
+              <CategoryRoundedIcon />
+            </Box>
 
-              <MenuItem
-                value={
-                  LangueCertificat.ARABE
-                }
+            <Box>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight:
+                    700,
+                }}
               >
-                Arabe
-              </MenuItem>
+                Nature de la demande
+              </Typography>
 
-              <MenuItem
-                value={
-                  LangueCertificat.ANGLAIS
-                }
+              <Typography
+                variant="body2"
+                color="text.secondary"
               >
-                Anglais
-              </MenuItem>
-            </TextField>
-          )}
-        />
+                Sélectionnez une
+                inscription foncière
+                ou une prestation
+                délivrée par l’ONPF.
+              </Typography>
+            </Box>
+          </Box>
 
-        <Box
-          sx={{
-            gridColumn: {
-              xs: "auto",
-              md: "1 / -1",
-            },
-          }}
-        >
+
           <Controller
-            name="traductionDemandee"
+            name="nature"
             control={control}
             render={({
               field,
             }) => (
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={
-                      field.value
-                    }
-                    disabled={
-                      submitting ||
-                      verifyingCin ||
-                      langueCertificat ===
-                        LangueCertificat.FRANCAIS
-                    }
-                    onChange={(
-                      _event,
-                      checked
-                    ) => {
-                      field.onChange(
-                        checked
-                      );
-                    }}
-                  />
+              <TextField
+                select
+                required
+                fullWidth
+                label="Nature de la demande"
+                value={
+                  field.value ??
+                  ""
                 }
-                label="Traduction demandée (+40 DT)"
-              />
+                disabled={
+                  fieldsDisabled ||
+                  isEditMode
+                }
+                error={
+                  Boolean(
+                    errors.nature
+                  )
+                }
+                helperText={
+                  errors.nature
+                    ?.message ??
+                  (
+                    isEditMode
+                      ? "La nature d’une demande existante ne peut pas être modifiée."
+                      : "Choisissez le type de dossier à enregistrer."
+                  )
+                }
+                onChange={(
+                  event
+                ) => {
+                  handleNatureChange(
+                    event
+                      .target
+                      .value as
+                      | typeof NatureDemande.INSCRIPTION
+                      | typeof NatureDemande.PRESTATION
+                  );
+                }}
+              >
+                <MenuItem
+                  value={
+                    NatureDemande
+                      .INSCRIPTION
+                  }
+                >
+                  Inscription foncière
+                </MenuItem>
+
+                <MenuItem
+                  value={
+                    NatureDemande
+                      .PRESTATION
+                  }
+                >
+                  Prestation
+                </MenuItem>
+              </TextField>
             )}
           />
 
-          {errors
-            .traductionDemandee
-            ?.message && (
-            <Typography
-              variant="caption"
-              color="error"
+
+          <Divider
+            sx={{
+              my: 4,
+            }}
+          />
+        </>
+      )}
+
+
+      {/* ===================================================== */}
+      {/* ANCIENNE DEMANDE */}
+      {/* ===================================================== */}
+
+      {isLegacy && (
+        <>
+          <Alert
+            severity="warning"
+            sx={{
+              mb: 3,
+            }}
+          >
+            Cette demande a été
+            créée avec l’ancien
+            modèle. Les anciens
+            paramètres sont
+            conservés uniquement
+            pour assurer la
+            compatibilité.
+          </Alert>
+
+
+          <Box
+            sx={{
+              display:
+                "grid",
+
+              gridTemplateColumns:
+                {
+                  xs: "1fr",
+
+                  md:
+                    "repeat(2, minmax(0, 1fr))",
+                },
+
+              gap: 2.5,
+            }}
+          >
+            <TextField
+              required
+              fullWidth
+              label="Référence foncière"
+              disabled={
+                fieldsDisabled
+              }
+              error={
+                Boolean(
+                  errors
+                    .referenceFonciere
+                )
+              }
+              helperText={
+                errors
+                  .referenceFonciere
+                  ?.message
+              }
+              {...register(
+                "referenceFonciere"
+              )}
+            />
+
+
+            <TextField
+              required
+              fullWidth
+              label="Adresse du bien"
+              disabled={
+                fieldsDisabled
+              }
+              error={
+                Boolean(
+                  errors
+                    .adresseBien
+                )
+              }
+              helperText={
+                errors
+                  .adresseBien
+                  ?.message
+              }
+              {...register(
+                "adresseBien"
+              )}
+            />
+
+
+            <TextField
+              required
+              fullWidth
+              type="number"
+              label="Nombre d’exemplaires"
+              disabled={
+                fieldsDisabled
+              }
+              error={
+                Boolean(
+                  errors
+                    .nombreExemplaires
+                )
+              }
+              helperText={
+                errors
+                  .nombreExemplaires
+                  ?.message
+              }
+              {...register(
+                "nombreExemplaires",
+                {
+                  valueAsNumber:
+                    true,
+                }
+              )}
+            />
+
+
+            <Controller
+              name="langueCertificat"
+              control={control}
+              render={({
+                field,
+              }) => (
+                <TextField
+                  {...field}
+                  select
+                  required
+                  fullWidth
+                  label="Langue du certificat"
+                  value={
+                    field.value ??
+                    ""
+                  }
+                  disabled={
+                    fieldsDisabled
+                  }
+                  error={
+                    Boolean(
+                      errors
+                        .langueCertificat
+                    )
+                  }
+                  helperText={
+                    errors
+                      .langueCertificat
+                      ?.message
+                  }
+                >
+                  <MenuItem
+                    value={
+                      LangueCertificat
+                        .FRANCAIS
+                    }
+                  >
+                    Français
+                  </MenuItem>
+
+                  <MenuItem
+                    value={
+                      LangueCertificat
+                        .ARABE
+                    }
+                  >
+                    Arabe
+                  </MenuItem>
+
+                  <MenuItem
+                    value={
+                      LangueCertificat
+                        .ANGLAIS
+                    }
+                  >
+                    Anglais
+                  </MenuItem>
+                </TextField>
+              )}
+            />
+
+
+            <Controller
+              name="traductionDemandee"
+              control={control}
+              render={({
+                field,
+              }) => (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={
+                        field.value ??
+                        false
+                      }
+                      disabled={
+                        fieldsDisabled
+                      }
+                      onChange={(
+                        _event,
+                        checked
+                      ) => {
+                        field.onChange(
+                          checked
+                        );
+                      }}
+                    />
+                  }
+                  label="Traduction demandée"
+                />
+              )}
+            />
+
+
+            <Alert
+              severity="info"
               sx={{
-                display: "block",
-                mt: 0.5,
+                gridColumn: {
+                  xs: "auto",
+                  md: "1 / -1",
+                },
               }}
             >
-              {
-                errors
-                  .traductionDemandee
-                  .message
-              }
-            </Typography>
+              <Typography
+                variant="body2"
+              >
+                Certificats :{" "}
+                {
+                  nombreExemplairesValide
+                }{" "}
+                ×{" "}
+                {formatMontant(
+                  LEGACY_PRIX_UNITAIRE_CERTIFICAT
+                )}
+              </Typography>
+
+              <Typography
+                variant="body2"
+              >
+                Ancien supplément
+                de traduction :{" "}
+                {formatMontant(
+                  legacySupplement
+                )}
+              </Typography>
+
+              <Typography
+                variant="body1"
+                sx={{
+                  mt: 1,
+                  fontWeight:
+                    800,
+                }}
+              >
+                Montant indicatif :{" "}
+                {formatMontant(
+                  legacyMontantTotal
+                )}
+              </Typography>
+            </Alert>
+          </Box>
+        </>
+      )}
+
+
+      {/* ===================================================== */}
+      {/* NOUVELLE STRUCTURE */}
+      {/* ===================================================== */}
+
+      {!isLegacy && (
+        <>
+          {/* ================================================= */}
+          {/* INSCRIPTION */}
+          {/* ================================================= */}
+
+          {nature ===
+            NatureDemande.INSCRIPTION && (
+            <>
+              <Box
+                sx={{
+                  display:
+                    "flex",
+
+                  alignItems:
+                    "flex-start",
+
+                  gap: 1.5,
+
+                  mb: 3,
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 44,
+                    height: 44,
+
+                    flexShrink:
+                      0,
+
+                    display:
+                      "flex",
+
+                    alignItems:
+                      "center",
+
+                    justifyContent:
+                      "center",
+
+                    borderRadius:
+                      2.5,
+
+                    color:
+                      "primary.main",
+
+                    bgcolor:
+                      "rgba(10, 74, 70, 0.10)",
+                  }}
+                >
+                  <HomeWorkRoundedIcon />
+                </Box>
+
+                <Box>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontWeight:
+                        700,
+                    }}
+                  >
+                    Informations foncières
+                  </Typography>
+
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                  >
+                    Un titre foncier
+                    est identifié par
+                    son numéro et son
+                    gouvernorat.
+                  </Typography>
+                </Box>
+              </Box>
+
+
+              <Box
+                sx={{
+                  display:
+                    "grid",
+
+                  gridTemplateColumns:
+                    {
+                      xs: "1fr",
+
+                      md:
+                        "repeat(2, minmax(0, 1fr))",
+                    },
+
+                  gap: 2.5,
+                }}
+              >
+                <Controller
+                  name="gouvernoratId"
+                  control={control}
+                  render={({
+                    field,
+                  }) => (
+                    <TextField
+                      {...field}
+                      select
+                      required
+                      fullWidth
+                      label="Gouvernorat"
+                      value={
+                        field.value ??
+                        ""
+                      }
+                      disabled={
+                        fieldsDisabled ||
+                        loadingReferentiels
+                      }
+                      error={
+                        Boolean(
+                          errors
+                            .gouvernoratId
+                        )
+                      }
+                      helperText={
+                        errors
+                          .gouvernoratId
+                          ?.message ??
+                        (
+                          loadingReferentiels
+                            ? "Chargement des gouvernorats..."
+                            : "Sélectionnez le gouvernorat du titre foncier."
+                        )
+                      }
+                    >
+                      {gouvernorats.map(
+                        (
+                          gouvernorat
+                        ) => (
+                          <MenuItem
+                            key={
+                              gouvernorat.id
+                            }
+                            value={
+                              gouvernorat.id
+                            }
+                          >
+                            {
+                              gouvernorat.nom
+                            }
+                          </MenuItem>
+                        )
+                      )}
+                    </TextField>
+                  )}
+                />
+
+
+                <TextField
+                  required
+                  fullWidth
+                  label="Numéro du titre foncier"
+                  placeholder="Ex. 45876"
+                  disabled={
+                    fieldsDisabled
+                  }
+                  error={
+                    Boolean(
+                      errors
+                        .numeroTitreFoncier
+                    )
+                  }
+                  helperText={
+                    errors
+                      .numeroTitreFoncier
+                      ?.message ??
+                    "Saisissez uniquement le numéro du titre."
+                  }
+                  {...register(
+                    "numeroTitreFoncier"
+                  )}
+                />
+
+
+                <TextField
+                  required
+                  fullWidth
+                  label="Adresse du bien"
+                  placeholder="Ville, quartier, localité..."
+                  disabled={
+                    fieldsDisabled
+                  }
+                  error={
+                    Boolean(
+                      errors
+                        .adresseBien
+                    )
+                  }
+                  helperText={
+                    errors
+                      .adresseBien
+                      ?.message
+                  }
+                  sx={{
+                    gridColumn: {
+                      xs: "auto",
+                      md: "1 / -1",
+                    },
+                  }}
+                  {...register(
+                    "adresseBien"
+                  )}
+                />
+
+
+                <FormControl
+                  component="fieldset"
+                  error={
+                    Boolean(
+                      errors
+                        .operationFonciereIds
+                    )
+                  }
+                  sx={{
+                    gridColumn: {
+                      xs: "auto",
+                      md: "1 / -1",
+                    },
+
+                    width:
+                      "100%",
+                  }}
+                >
+                  <Typography
+                    variant="subtitle1"
+                    sx={{
+                      fontWeight:
+                        700,
+
+                      mb: 1,
+                    }}
+                  >
+                    Opération(s) foncière(s) *
+                  </Typography>
+
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      mb: 1.5,
+                    }}
+                  >
+                    Plusieurs opérations
+                    peuvent être
+                    sélectionnées pour
+                    une même demande.
+                  </Typography>
+
+
+                  {loadingReferentiels ? (
+                    <Box
+                      sx={{
+                        display:
+                          "flex",
+
+                        alignItems:
+                          "center",
+
+                        gap: 1,
+                      }}
+                    >
+                      <CircularProgress
+                        size={
+                          20
+                        }
+                      />
+
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                      >
+                        Chargement des opérations...
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Controller
+                      name="operationFonciereIds"
+                      control={control}
+                      render={({
+                        field,
+                      }) => {
+                        const selectedValues =
+                          field.value ??
+                          [];
+
+                        return (
+                          <FormGroup
+                            sx={{
+                              display:
+                                "grid",
+
+                              gridTemplateColumns:
+                                {
+                                  xs:
+                                    "1fr",
+
+                                  sm:
+                                    "repeat(2, minmax(0, 1fr))",
+
+                                  md:
+                                    "repeat(3, minmax(0, 1fr))",
+                                },
+
+                              gap:
+                                0.5,
+                            }}
+                          >
+                            {operationsFoncieres.map(
+                              (
+                                operation
+                              ) => {
+                                const checked =
+                                  selectedValues
+                                    .includes(
+                                      operation.id
+                                    );
+
+                                return (
+                                  <FormControlLabel
+                                    key={
+                                      operation.id
+                                    }
+                                    disabled={
+                                      fieldsDisabled
+                                    }
+                                    control={
+                                      <Checkbox
+                                        checked={
+                                          checked
+                                        }
+                                        onChange={(
+                                          event
+                                        ) => {
+                                          const nextValues =
+                                            event
+                                              .target
+                                              .checked
+                                              ? [
+                                                  ...selectedValues,
+                                                  operation.id,
+                                                ]
+                                              : selectedValues.filter(
+                                                  (
+                                                    id
+                                                  ) =>
+                                                    id !==
+                                                    operation.id
+                                                );
+
+                                          field.onChange(
+                                            nextValues
+                                          );
+                                        }}
+                                      />
+                                    }
+                                    label={
+                                      operation
+                                        .libelle
+                                    }
+                                  />
+                                );
+                              }
+                            )}
+                          </FormGroup>
+                        );
+                      }}
+                    />
+                  )}
+
+
+                  {errors
+                    .operationFonciereIds
+                    ?.message && (
+                    <FormHelperText>
+                      {
+                        errors
+                          .operationFonciereIds
+                          .message
+                      }
+                    </FormHelperText>
+                  )}
+                </FormControl>
+              </Box>
+            </>
           )}
 
-          <Typography
-            variant="caption"
-            color="text.secondary"
+
+          {/* ================================================= */}
+          {/* PRESTATION */}
+          {/* ================================================= */}
+
+          {nature ===
+            NatureDemande.PRESTATION && (
+            <>
+              <Box
+                sx={{
+                  display:
+                    "flex",
+
+                  alignItems:
+                    "flex-start",
+
+                  gap: 1.5,
+
+                  mb: 3,
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 44,
+                    height: 44,
+
+                    flexShrink:
+                      0,
+
+                    display:
+                      "flex",
+
+                    alignItems:
+                      "center",
+
+                    justifyContent:
+                      "center",
+
+                    borderRadius:
+                      2.5,
+
+                    color:
+                      "primary.main",
+
+                    bgcolor:
+                      "rgba(10, 74, 70, 0.10)",
+                  }}
+                >
+                  <RequestQuoteRoundedIcon />
+                </Box>
+
+                <Box>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontWeight:
+                        700,
+                    }}
+                  >
+                    Prestation demandée
+                  </Typography>
+
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                  >
+                    Sélectionnez la
+                    prestation. Les
+                    champs nécessaires
+                    sont adaptés
+                    automatiquement.
+                  </Typography>
+                </Box>
+              </Box>
+
+
+              <Box
+                sx={{
+                  display:
+                    "grid",
+
+                  gridTemplateColumns:
+                    {
+                      xs: "1fr",
+
+                      md:
+                        "repeat(2, minmax(0, 1fr))",
+                    },
+
+                  gap: 2.5,
+                }}
+              >
+                <Controller
+                  name="prestationId"
+                  control={control}
+                  render={({
+                    field,
+                  }) => (
+                    <TextField
+                      select
+                      required
+                      fullWidth
+                      label="Prestation"
+                      value={
+                        field.value ??
+                        ""
+                      }
+                      disabled={
+                        fieldsDisabled ||
+                        loadingReferentiels
+                      }
+                      error={
+                        Boolean(
+                          errors
+                            .prestationId
+                        )
+                      }
+                      helperText={
+                        errors
+                          .prestationId
+                          ?.message ??
+                        (
+                          loadingReferentiels
+                            ? "Chargement des prestations..."
+                            : "Sélectionnez la prestation souhaitée."
+                        )
+                      }
+                      onChange={(
+                        event
+                      ) => {
+                        field.onChange(
+                          event
+                            .target
+                            .value
+                        );
+
+                        handlePrestationChange(
+                          event
+                            .target
+                            .value
+                        );
+                      }}
+                    >
+                      {prestations.map(
+                        (
+                          prestation
+                        ) => (
+                          <MenuItem
+                            key={
+                              prestation.id
+                            }
+                            value={
+                              prestation.id
+                            }
+                          >
+                            {
+                              prestation.libelle
+                            }
+                          </MenuItem>
+                        )
+                      )}
+                    </TextField>
+                  )}
+                />
+
+
+                <Controller
+                  name="langue"
+                  control={control}
+                  render={({
+                    field,
+                  }) => (
+                    <TextField
+                      {...field}
+                      select
+                      required
+                      fullWidth
+                      label="Langue"
+                      value={
+                        field.value ??
+                        ""
+                      }
+                      disabled={
+                        fieldsDisabled
+                      }
+                      error={
+                        Boolean(
+                          errors.langue
+                        )
+                      }
+                      helperText={
+                        errors.langue
+                          ?.message ??
+                        (
+                          prestationSelectionnee
+                            ?.supplementFrancaisApplicable
+                            ? "Un supplément réglementaire peut s’appliquer au français."
+                            : "Sélectionnez la langue de la prestation."
+                        )
+                      }
+                    >
+                      <MenuItem
+                        value={
+                          LangueCertificat
+                            .ARABE
+                        }
+                      >
+                        Arabe
+                      </MenuItem>
+
+                      <MenuItem
+                        value={
+                          LangueCertificat
+                            .FRANCAIS
+                        }
+                      >
+                        Français
+                      </MenuItem>
+                    </TextField>
+                  )}
+                />
+
+
+                {prestationSelectionnee
+                  ?.tarificationParPage && (
+                  <TextField
+                    required
+                    fullWidth
+                    type="number"
+                    label="Nombre de pages"
+                    disabled={
+                      fieldsDisabled
+                    }
+                    error={
+                      Boolean(
+                        errors
+                          .nombrePages
+                      )
+                    }
+                    helperText={
+                      errors
+                        .nombrePages
+                        ?.message ??
+                      "Le tarif de cette prestation dépend du nombre de pages."
+                    }
+                    slotProps={{
+                      htmlInput: {
+                        min: 1,
+                        step: 1,
+
+                        inputMode:
+                          "numeric",
+                      },
+                    }}
+                    {...register(
+                      "nombrePages",
+                      {
+                        valueAsNumber:
+                          true,
+                      }
+                    )}
+                  />
+                )}
+
+
+                {afficherTitrePrestation && (
+                  <>
+                    <Controller
+                      name="gouvernoratId"
+                      control={control}
+                      render={({
+                        field,
+                      }) => (
+                        <TextField
+                          {...field}
+                          select
+                          required={
+                            Boolean(
+                              prestationSelectionnee
+                                ?.necessiteTitreFoncier
+                            )
+                          }
+                          fullWidth
+                          label="Gouvernorat"
+                          value={
+                            field.value ??
+                            ""
+                          }
+                          disabled={
+                            fieldsDisabled ||
+                            loadingReferentiels
+                          }
+                          error={
+                            Boolean(
+                              errors
+                                .gouvernoratId
+                            )
+                          }
+                          helperText={
+                            errors
+                              .gouvernoratId
+                              ?.message ??
+                            (
+                              prestationSelectionnee
+                                ?.necessiteTitreFoncier
+                                ? "Obligatoire pour cette prestation."
+                                : "Titre associé à la demande."
+                            )
+                          }
+                        >
+                          {gouvernorats.map(
+                            (
+                              gouvernorat
+                            ) => (
+                              <MenuItem
+                                key={
+                                  gouvernorat.id
+                                }
+                                value={
+                                  gouvernorat.id
+                                }
+                              >
+                                {
+                                  gouvernorat.nom
+                                }
+                              </MenuItem>
+                            )
+                          )}
+                        </TextField>
+                      )}
+                    />
+
+
+                    <TextField
+                      required={
+                        Boolean(
+                          prestationSelectionnee
+                            ?.necessiteTitreFoncier
+                        )
+                      }
+                      fullWidth
+                      label="Numéro du titre foncier"
+                      placeholder="Ex. 45876"
+                      disabled={
+                        fieldsDisabled
+                      }
+                      error={
+                        Boolean(
+                          errors
+                            .numeroTitreFoncier
+                        )
+                      }
+                      helperText={
+                        errors
+                          .numeroTitreFoncier
+                          ?.message ??
+                        (
+                          prestationSelectionnee
+                            ?.necessiteTitreFoncier
+                            ? "Obligatoire pour cette prestation."
+                            : "Titre associé à la demande."
+                        )
+                      }
+                      {...register(
+                        "numeroTitreFoncier"
+                      )}
+                    />
+                  </>
+                )}
+
+
+                <TextField
+                  required
+                  fullWidth
+                  label="Adresse du bien"
+                  placeholder="Ville, quartier, localité..."
+                  disabled={
+                    fieldsDisabled
+                  }
+                  error={
+                    Boolean(
+                      errors
+                        .adresseBien
+                    )
+                  }
+                  helperText={
+                    errors
+                      .adresseBien
+                      ?.message
+                  }
+                  sx={{
+                    gridColumn: {
+                      xs: "auto",
+                      md: "1 / -1",
+                    },
+                  }}
+                  {...register(
+                    "adresseBien"
+                  )}
+                />
+
+
+                {prestationSelectionnee && (
+                  <Alert
+                    severity="info"
+                    sx={{
+                      gridColumn: {
+                        xs: "auto",
+                        md: "1 / -1",
+                      },
+                    }}
+                  >
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight:
+                          700,
+
+                        mb: 0.5,
+                      }}
+                    >
+                      {
+                        prestationSelectionnee
+                          .libelle
+                      }
+                    </Typography>
+
+                    {prestationSelectionnee
+                      .description && (
+                      <Typography
+                        variant="body2"
+                      >
+                        {
+                          prestationSelectionnee
+                            .description
+                        }
+                      </Typography>
+                    )}
+
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{
+                        display:
+                          "block",
+
+                        mt: 0.5,
+                      }}
+                    >
+                      Titre foncier :{" "}
+                      {prestationSelectionnee
+                        .necessiteTitreFoncier
+                        ? "obligatoire"
+                        : "non requis"}
+                      {" • "}
+                      Tarification par page :{" "}
+                      {prestationSelectionnee
+                        .tarificationParPage
+                        ? "oui"
+                        : "non"}
+                    </Typography>
+                  </Alert>
+                )}
+              </Box>
+            </>
+          )}
+
+
+          <Divider
             sx={{
-              display: "block",
-              mt: 0.5,
+              my: 4,
+            }}
+          />
+
+
+          {/* ================================================= */}
+          {/* TARIFICATION */}
+          {/* ================================================= */}
+
+          <Box
+            sx={{
+              display:
+                "flex",
+
+              alignItems:
+                "flex-start",
+
+              gap: 1.5,
+
+              mb: 3,
             }}
           >
-            La traduction est
-            obligatoire pour un
-            certificat en arabe ou
-            en anglais.
-          </Typography>
-        </Box>
+            <Box
+              sx={{
+                width: 44,
+                height: 44,
 
-        <Alert
-          severity="info"
-          sx={{
-            gridColumn: {
-              xs: "auto",
-              md: "1 / -1",
-            },
+                flexShrink:
+                  0,
 
-            alignItems:
-              "flex-start",
-          }}
-        >
-          <Typography
-            variant="body2"
-            sx={{
-              fontWeight: 700,
-              mb: 1,
-            }}
-          >
-            Aperçu du montant à
-            payer
-          </Typography>
+                display:
+                  "flex",
 
-          <Typography
-            variant="body2"
-          >
-            Prix des certificats :{" "}
-            {nombreExemplairesValide}{" "}
-            ×{" "}
-            {formatMontant(
-              PRIX_UNITAIRE_CERTIFICAT
-            )}{" "}
-            ={" "}
-            {formatMontant(
-              nombreExemplairesValide *
-                PRIX_UNITAIRE_CERTIFICAT
-            )}
-          </Typography>
+                alignItems:
+                  "center",
 
-          <Typography
-            variant="body2"
-          >
-            Supplément de
-            traduction :{" "}
-            {formatMontant(
-              supplementTraduction
-            )}
-          </Typography>
+                justifyContent:
+                  "center",
 
-          <Typography
-            variant="body1"
-            sx={{
-              mt: 1,
-              fontWeight: 800,
-            }}
-          >
-            Montant total :{" "}
-            {formatMontant(
-              montantTotalCalcule
-            )}
-          </Typography>
+                borderRadius:
+                  2.5,
 
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{
-              display: "block",
-              mt: 1,
-            }}
-          >
-            Ce calcul est présenté
-            à titre indicatif. Le
-            montant définitif est
-            recalculé et sécurisé
-            par le serveur.
-          </Typography>
-        </Alert>
-      </Box>
+                color:
+                  "primary.main",
+
+                bgcolor:
+                  "rgba(10, 74, 70, 0.10)",
+              }}
+            >
+              <RequestQuoteRoundedIcon />
+            </Box>
+
+            <Box>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight:
+                    700,
+                }}
+              >
+                Tarification
+              </Typography>
+
+              <Typography
+                variant="body2"
+                color="text.secondary"
+              >
+                Le montant est calculé
+                automatiquement par le
+                serveur à partir du
+                tarif réglementaire.
+              </Typography>
+            </Box>
+          </Box>
+
+
+          {tarificationEnCours && (
+            <Alert
+              severity="info"
+              icon={
+                <CircularProgress
+                  size={
+                    20
+                  }
+                />
+              }
+            >
+              Calcul du montant
+              réglementaire en cours...
+            </Alert>
+          )}
+
+
+          {!tarificationEnCours &&
+            tarificationErrorAffichee && (
+            <Alert
+              severity="error"
+            >
+              {tarificationErrorAffichee}
+            </Alert>
+          )}
+
+
+          {!tarificationEnCours &&
+            !tarificationErrorAffichee &&
+            !tarificationAffichee && (
+            <Alert
+              severity="info"
+            >
+              {nature ===
+              NatureDemande.INSCRIPTION
+                ? "Sélectionnez au moins une opération foncière pour calculer le montant."
+                : "Sélectionnez une prestation et renseignez ses paramètres pour calculer le montant."}
+            </Alert>
+          )}
+
+
+          {!tarificationEnCours &&
+            tarificationAffichee && (
+            <Paper
+              variant="outlined"
+              sx={{
+                overflow:
+                  "hidden",
+              }}
+            >
+              <Box
+                sx={{
+                  px: 2.5,
+                  py: 2,
+
+                  bgcolor:
+                    "action.hover",
+                }}
+              >
+                <Typography
+                  variant="subtitle1"
+                  sx={{
+                    fontWeight:
+                      800,
+                  }}
+                >
+                  Détail du calcul
+                </Typography>
+              </Box>
+
+
+              <Box
+                sx={{
+                  px: 2.5,
+                }}
+              >
+                {tarificationAffichee
+                  .lignes
+                  .slice()
+                  .sort(
+                    (
+                      a,
+                      b
+                    ) =>
+                      a.ordre -
+                      b.ordre
+                  )
+                  .map(
+                    (
+                      ligne
+                    ) => (
+                      <Box
+                        key={
+                          `${ligne.code}-${ligne.ordre}`
+                        }
+                        sx={{
+                          display:
+                            "grid",
+
+                          gridTemplateColumns:
+                            {
+                              xs:
+                                "1fr",
+
+                              sm:
+                                "minmax(0, 1fr) auto",
+                            },
+
+                          gap:
+                            1,
+
+                          py:
+                            1.5,
+
+                          borderBottom:
+                            "1px solid",
+
+                          borderColor:
+                            "divider",
+                        }}
+                      >
+                        <Box>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontWeight:
+                                600,
+                            }}
+                          >
+                            {
+                              ligne.libelle
+                            }
+                          </Typography>
+
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                          >
+                            Quantité :{" "}
+                            {
+                              ligne.quantite
+                            }
+                            {" × "}
+                            {formatMontant(
+                              ligne
+                                .montantUnitaire
+                            )}
+                          </Typography>
+                        </Box>
+
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight:
+                              700,
+
+                            whiteSpace:
+                              "nowrap",
+                          }}
+                        >
+                          {formatMontant(
+                            ligne.montant
+                          )}
+                        </Typography>
+                      </Box>
+                    )
+                  )}
+              </Box>
+
+
+              <Box
+                sx={{
+                  px: 2.5,
+                  py: 2,
+
+                  display:
+                    "flex",
+
+                  justifyContent:
+                    "space-between",
+
+                  alignItems:
+                    "center",
+
+                  gap: 2,
+                }}
+              >
+                <Typography
+                  variant="subtitle1"
+                  sx={{
+                    fontWeight:
+                      800,
+                  }}
+                >
+                  Montant total
+                </Typography>
+
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight:
+                      900,
+
+                    color:
+                      "primary.main",
+                  }}
+                >
+                  {formatMontant(
+                    tarificationAffichee
+                      .montantTotal
+                  )}
+                </Typography>
+              </Box>
+
+
+              {tarificationAffichee
+                .referenceReglementaire && (
+                <Box
+                  sx={{
+                    px: 2.5,
+                    pb: 2,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                  >
+                    Référence réglementaire :{" "}
+                    {
+                      tarificationAffichee
+                        .referenceReglementaire
+                    }
+                  </Typography>
+                </Box>
+              )}
+            </Paper>
+          )}
+        </>
+      )}
+
 
       <Divider
         sx={{
@@ -1425,14 +4136,21 @@ function DemandeForm({
         }}
       />
 
-      {/* Observations */}
+
+      {/* ===================================================== */}
+      {/* OBSERVATIONS */}
+      {/* ===================================================== */}
 
       <Box
         sx={{
-          display: "flex",
+          display:
+            "flex",
+
           alignItems:
             "flex-start",
+
           gap: 1.5,
+
           mb: 3,
         }}
       >
@@ -1440,15 +4158,25 @@ function DemandeForm({
           sx={{
             width: 44,
             height: 44,
-            flexShrink: 0,
-            display: "flex",
+
+            flexShrink:
+              0,
+
+            display:
+              "flex",
+
             alignItems:
               "center",
+
             justifyContent:
               "center",
-            borderRadius: 2.5,
+
+            borderRadius:
+              2.5,
+
             color:
               "primary.main",
+
             bgcolor:
               "rgba(10, 74, 70, 0.10)",
           }}
@@ -1460,7 +4188,8 @@ function DemandeForm({
           <Typography
             variant="h6"
             sx={{
-              fontWeight: 700,
+              fontWeight:
+                700,
             }}
           >
             Observations
@@ -1477,27 +4206,34 @@ function DemandeForm({
         </Box>
       </Box>
 
+
       <TextField
         fullWidth
         multiline
-        minRows={4}
+        minRows={
+          4
+        }
         label="Observations complémentaires"
         placeholder="Précisions particulières concernant la demande..."
         disabled={
-          submitting ||
-          verifyingCin
+          fieldsDisabled
         }
-        error={Boolean(
-          errors.observations
-        )}
+        error={
+          Boolean(
+            errors
+              .observations
+          )
+        }
         helperText={
-          errors.observations
+          errors
+            .observations
             ?.message ??
           `${observations.length}/500 caractères`
         }
         slotProps={{
           htmlInput: {
-            maxLength: 500,
+            maxLength:
+              500,
           },
         }}
         {...register(
@@ -1505,30 +4241,43 @@ function DemandeForm({
         )}
       />
 
+
       <Divider
         sx={{
           my: 4,
         }}
       />
 
-      {/* Actions */}
+
+      {/* ===================================================== */}
+      {/* ACTIONS */}
+      {/* ===================================================== */}
 
       <Stack
         direction={{
-          xs: "column-reverse",
-          sm: "row",
+          xs:
+            "column-reverse",
+
+          sm:
+            "row",
         }}
-        spacing={1.5}
+        spacing={
+          1.5
+        }
         sx={{
           justifyContent:
             "flex-end",
 
-          "& > button": {
-            width: {
-              xs: "100%",
-              sm: "auto",
+          "& > button":
+            {
+              width: {
+                xs:
+                  "100%",
+
+                sm:
+                  "auto",
+              },
             },
-          },
         }}
       >
         <Button
@@ -1550,22 +4299,36 @@ function DemandeForm({
           Annuler
         </Button>
 
+
         <Button
           type="submit"
           variant="contained"
           startIcon={
-            submitting ? (
-              <CircularProgress
-                size={19}
-                color="inherit"
-              />
-            ) : (
-              <SaveRoundedIcon />
-            )
+            submitting
+              ? (
+                  <CircularProgress
+                    size={
+                      19
+                    }
+                    color="inherit"
+                  />
+                )
+              : (
+                  <SaveRoundedIcon />
+                )
           }
           disabled={
             submitting ||
-            verifyingCin
+            verifyingCin ||
+            demandeVerrouillee ||
+            (
+              !isLegacy &&
+              loadingReferentiels
+            ) ||
+            (
+              !isLegacy &&
+              !tarificationAffichee
+            )
           }
         >
           {submitting
@@ -1580,5 +4343,6 @@ function DemandeForm({
     </Paper>
   );
 }
+
 
 export default DemandeForm;

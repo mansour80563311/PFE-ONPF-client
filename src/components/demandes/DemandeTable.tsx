@@ -1,4 +1,5 @@
 import {
+  Box,
   Button,
   Chip,
   Dialog,
@@ -15,6 +16,7 @@ import {
   TableHead,
   TableRow,
   Tooltip,
+  Typography,
 } from "@mui/material";
 
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
@@ -44,6 +46,7 @@ import {
 } from "../../utils/roles";
 
 import {
+  NatureDemande,
   StatutDemande,
 } from "../../types/demande";
 
@@ -61,6 +64,7 @@ import type {
   Demande,
 } from "../../types/demande";
 
+
 interface Props {
   demandes:
     Demande[];
@@ -69,22 +73,74 @@ interface Props {
     () => Promise<void>;
 }
 
-/*
- * Retourne le libellé du statut
- * de paiement.
+
+/**
+ * ============================================================
+ * OUTILS D'AFFICHAGE
+ * ============================================================
+ */
+
+/**
+ * Retourne le libellé de la nature métier.
+ */
+function getNatureLabel(
+  demande: Demande
+): string {
+  switch (
+    demande.nature
+  ) {
+    case NatureDemande.INSCRIPTION:
+      return "Inscription";
+
+    case NatureDemande.PRESTATION:
+      return "Prestation";
+
+    default:
+      return "Ancien modèle";
+  }
+}
+
+
+function getNatureColor(
+  demande: Demande
+):
+  | "primary"
+  | "info"
+  | "default" {
+  switch (
+    demande.nature
+  ) {
+    case NatureDemande.INSCRIPTION:
+      return "primary";
+
+    case NatureDemande.PRESTATION:
+      return "info";
+
+    default:
+      return "default";
+  }
+}
+
+
+/**
+ * Retourne le libellé du statut de paiement.
  *
- * L’absence d’objet paiement signifie
- * qu’aucun encaissement n’a été réalisé.
+ * L'absence d'objet paiement signifie
+ * qu'aucun encaissement n'a été réalisé.
  */
 function getPaiementLabel(
   demande: Demande
 ): string {
-  if (!demande.paiement) {
+  if (
+    !demande.paiement
+  ) {
     return "Non payé";
   }
 
   switch (
-    demande.paiement.statut
+    demande
+      .paiement
+      .statut
   ) {
     case StatutPaiement.PAYE:
       return "Payé";
@@ -97,7 +153,8 @@ function getPaiementLabel(
   }
 }
 
-/*
+
+/**
  * Retourne la couleur utilisée par
  * le badge de paiement.
  */
@@ -108,12 +165,16 @@ function getPaiementColor(
   | "warning"
   | "error"
   | "default" {
-  if (!demande.paiement) {
+  if (
+    !demande.paiement
+  ) {
     return "warning";
   }
 
   switch (
-    demande.paiement.statut
+    demande
+      .paiement
+      .statut
   ) {
     case StatutPaiement.PAYE:
       return "success";
@@ -126,6 +187,81 @@ function getPaiementColor(
   }
 }
 
+
+/**
+ * Affichage du titre foncier.
+ *
+ * Nouveau modèle :
+ * numéro + gouvernorat.
+ *
+ * Ancien modèle :
+ * référence foncière historique.
+ */
+function TitreFoncierCell({
+  demande,
+}: {
+  demande: Demande;
+}) {
+  if (
+    demande.nature == null
+  ) {
+    return (
+      <Typography
+        variant="body2"
+        sx={{
+          fontWeight: 600,
+        }}
+      >
+        {demande.referenceFonciere ||
+          "Non renseignée"}
+      </Typography>
+    );
+  }
+
+  if (
+    !demande.titreFoncier
+  ) {
+    return (
+      <Typography
+        variant="body2"
+        color="text.secondary"
+      >
+        Sans titre foncier
+      </Typography>
+    );
+  }
+
+  return (
+    <Box>
+      <Typography
+        variant="body2"
+        sx={{
+          fontWeight: 700,
+        }}
+      >
+        {
+          demande
+            .titreFoncier
+            .numero
+        }
+      </Typography>
+
+      <Typography
+        variant="caption"
+        color="text.secondary"
+      >
+        {
+          demande
+            .titreFoncier
+            .gouvernorat
+            .nom
+        }
+      </Typography>
+    </Box>
+  );
+}
+
+
 function DemandeTable({
   demandes,
   onReload,
@@ -137,7 +273,8 @@ function DemandeTable({
   const [
     deleteDialogOpen,
     setDeleteDialogOpen,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     selectedDemande,
@@ -150,7 +287,8 @@ function DemandeTable({
   const [
     deleting,
     setDeleting,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const isAdmin =
     user?.role ===
@@ -160,14 +298,23 @@ function DemandeTable({
     user?.role ===
     ROLES.AGENT;
 
+
+  /**
+   * ==========================================================
+   * DROITS DE MODIFICATION
+   * ==========================================================
+   */
+
   const canEditDemande = (
     demande: Demande
   ): boolean => {
-    if (!user) {
+    if (
+      !user
+    ) {
       return false;
     }
 
-    /*
+    /**
      * Une demande terminée ne peut
      * plus être modifiée.
      */
@@ -179,12 +326,9 @@ function DemandeTable({
       return false;
     }
 
-    /*
-     * Dès qu’un paiement existe,
+    /**
+     * Dès qu'un paiement existe,
      * la demande devient verrouillée.
-     *
-     * Cela correspond à la règle
-     * appliquée par le backend.
      */
     if (
       demande.paiement
@@ -192,17 +336,19 @@ function DemandeTable({
       return false;
     }
 
-    /*
-     * L’administrateur conserve l’accès
+    /**
+     * L'administrateur conserve l'accès
      * à toute demande non terminée
      * et non payée.
      */
-    if (isAdmin) {
+    if (
+      isAdmin
+    ) {
       return true;
     }
 
-    /*
-     * L’agent ne peut modifier que sa
+    /**
+     * L'agent ne peut modifier que sa
      * propre demande avant transmission
      * et avant paiement.
      */
@@ -215,6 +361,7 @@ function DemandeTable({
     );
   };
 
+
   const canDeleteDemande = (
     demande: Demande
   ): boolean => {
@@ -222,6 +369,13 @@ function DemandeTable({
       demande
     );
   };
+
+
+  /**
+   * ==========================================================
+   * SUPPRESSION
+   * ==========================================================
+   */
 
   const handleDeleteClick = (
     demande: Demande
@@ -235,9 +389,12 @@ function DemandeTable({
     );
   };
 
+
   const handleCloseDeleteDialog =
     () => {
-      if (deleting) {
+      if (
+        deleting
+      ) {
         return;
       }
 
@@ -250,9 +407,12 @@ function DemandeTable({
       );
     };
 
+
   const handleConfirmDelete =
     async () => {
-      if (!selectedDemande) {
+      if (
+        !selectedDemande
+      ) {
         return;
       }
 
@@ -290,6 +450,13 @@ function DemandeTable({
       }
     };
 
+
+  /**
+   * ==========================================================
+   * AFFICHAGE
+   * ==========================================================
+   */
+
   return (
     <>
       <TableContainer
@@ -314,11 +481,11 @@ function DemandeTable({
               </TableCell>
 
               <TableCell>
-                CIN
+                Nature
               </TableCell>
 
               <TableCell>
-                Référence foncière
+                Titre / Gouvernorat
               </TableCell>
 
               <TableCell>
@@ -340,6 +507,7 @@ function DemandeTable({
               </TableCell>
             </TableRow>
           </TableHead>
+
 
           <TableBody>
             {demandes.length ===
@@ -382,6 +550,8 @@ function DemandeTable({
                       }
                       hover
                     >
+                      {/* Numéro */}
+
                       <TableCell
                         sx={{
                           fontWeight:
@@ -389,6 +559,9 @@ function DemandeTable({
 
                           color:
                             "primary.main",
+
+                          whiteSpace:
+                            "nowrap",
                         }}
                       >
                         {
@@ -396,43 +569,89 @@ function DemandeTable({
                         }
                       </TableCell>
 
-                      <TableCell>
-                        {
-                          demande
-                            .prenomDemandeur
-                        }{" "}
-                        {
-                          demande
-                            .nomDemandeur
-                        }
-                      </TableCell>
+
+                      {/* Demandeur */}
 
                       <TableCell>
-                        {
-                          demande.cin
-                        }
+                        <Box>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontWeight:
+                                700,
+                            }}
+                          >
+                            {
+                              demande
+                                .prenomDemandeur
+                            }{" "}
+                            {
+                              demande
+                                .nomDemandeur
+                            }
+                          </Typography>
+
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                          >
+                            CIN : {
+                              demande.cin
+                            }
+                          </Typography>
+                        </Box>
                       </TableCell>
 
+
+                      {/* Nature */}
+
                       <TableCell>
-                        {
-                          demande
-                            .referenceFonciere
-                        }
+                        <Chip
+                          label={
+                            getNatureLabel(
+                              demande
+                            )
+                          }
+                          color={
+                            getNatureColor(
+                              demande
+                            )
+                          }
+                          size="small"
+                          variant="outlined"
+                        />
                       </TableCell>
+
+
+                      {/* Titre / Gouvernorat */}
+
+                      <TableCell>
+                        <TitreFoncierCell
+                          demande={
+                            demande
+                          }
+                        />
+                      </TableCell>
+
 
                       {/* Statut de traitement */}
 
                       <TableCell>
                         <Chip
-                          label={getStatusLabel(
-                            demande.statut
-                          )}
-                          color={getStatusColor(
-                            demande.statut
-                          )}
+                          label={
+                            getStatusLabel(
+                              demande.statut
+                            )
+                          }
+                          color={
+                            getStatusColor(
+                              demande.statut
+                            )
+                          }
                           size="small"
                         />
                       </TableCell>
+
 
                       {/* Statut du paiement */}
 
@@ -445,12 +664,16 @@ function DemandeTable({
                           }
                         >
                           <Chip
-                            label={getPaiementLabel(
-                              demande
-                            )}
-                            color={getPaiementColor(
-                              demande
-                            )}
+                            label={
+                              getPaiementLabel(
+                                demande
+                              )
+                            }
+                            color={
+                              getPaiementColor(
+                                demande
+                              )
+                            }
                             size="small"
                             variant={
                               demande.paiement
@@ -461,23 +684,52 @@ function DemandeTable({
                         </Tooltip>
                       </TableCell>
 
+
+                      {/* Créateur */}
+
                       <TableCell>
-                        {
-                          demande
-                            .utilisateur
-                            .prenom
-                        }{" "}
-                        {
-                          demande
-                            .utilisateur
-                            .nom
-                        }
+                        <Box>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontWeight:
+                                600,
+                            }}
+                          >
+                            {
+                              demande
+                                .utilisateur
+                                .prenom
+                            }{" "}
+                            {
+                              demande
+                                .utilisateur
+                                .nom
+                            }
+                          </Typography>
+
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                          >
+                            {
+                              demande
+                                .utilisateur
+                                .login
+                            }
+                          </Typography>
+                        </Box>
                       </TableCell>
+
+
+                      {/* Actions */}
 
                       <TableCell
                         align="center"
                       >
-                        <Tooltip title="Consulter la demande">
+                        <Tooltip
+                          title="Consulter la demande"
+                        >
                           <IconButton
                             component={
                               Link
@@ -490,8 +742,11 @@ function DemandeTable({
                           </IconButton>
                         </Tooltip>
 
+
                         {canEdit && (
-                          <Tooltip title="Modifier la demande">
+                          <Tooltip
+                            title="Modifier la demande"
+                          >
                             <IconButton
                               component={
                                 Link
@@ -505,8 +760,11 @@ function DemandeTable({
                           </Tooltip>
                         )}
 
+
                         {canDelete && (
-                          <Tooltip title="Supprimer la demande">
+                          <Tooltip
+                            title="Supprimer la demande"
+                          >
                             <IconButton
                               color="error"
                               aria-label={`Supprimer la demande ${demande.numero}`}
@@ -529,6 +787,11 @@ function DemandeTable({
           </TableBody>
         </Table>
       </TableContainer>
+
+
+      {/* ===================================================== */}
+      {/* DIALOGUE DE SUPPRESSION */}
+      {/* ===================================================== */}
 
       <Dialog
         open={
@@ -600,5 +863,6 @@ function DemandeTable({
     </>
   );
 }
+
 
 export default DemandeTable;

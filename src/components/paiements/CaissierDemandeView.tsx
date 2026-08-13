@@ -21,6 +21,31 @@ import {
   useDemande,
 } from "../../hooks/useDemande";
 
+import {
+  NatureDemande,
+} from "../../types/demande";
+
+
+function getNatureLabel(
+  nature:
+    | typeof NatureDemande.INSCRIPTION
+    | typeof NatureDemande.PRESTATION
+    | null
+    | undefined
+): string {
+  switch (nature) {
+    case NatureDemande.INSCRIPTION:
+      return "Inscription foncière";
+
+    case NatureDemande.PRESTATION:
+      return "Prestation";
+
+    default:
+      return "Ancien modèle";
+  }
+}
+
+
 function CaissierDemandeView() {
   const navigate =
     useNavigate();
@@ -40,6 +65,7 @@ function CaissierDemandeView() {
     id ?? ""
   );
 
+
   if (loading) {
     return (
       <Paper
@@ -57,17 +83,33 @@ function CaissierDemandeView() {
     );
   }
 
+
   if (
     errorMessage ||
     !demande
   ) {
     return (
-      <Alert severity="error">
+      <Alert
+        severity="error"
+      >
         {errorMessage ??
           "Demande introuvable."}
       </Alert>
     );
   }
+
+
+  const isLegacy =
+    demande.nature == null;
+
+  const isInscription =
+    demande.nature ===
+    NatureDemande.INSCRIPTION;
+
+  const isPrestation =
+    demande.nature ===
+    NatureDemande.PRESTATION;
+
 
   return (
     <Box
@@ -101,7 +143,6 @@ function CaissierDemandeView() {
         ]}
       />
 
-      {/* Identification minimale du dossier */}
 
       <Paper
         variant="outlined"
@@ -161,11 +202,13 @@ function CaissierDemandeView() {
               color="text.secondary"
             >
               Vérifiez l’identité du citoyen
-              avant de procéder à
+              et les informations essentielles
+              du dossier avant de procéder à
               l’encaissement.
             </Typography>
           </Box>
         </Box>
+
 
         <Box
           sx={{
@@ -174,9 +217,11 @@ function CaissierDemandeView() {
             gridTemplateColumns: {
               xs: "1fr",
 
-              sm: "repeat(2, minmax(0, 1fr))",
+              sm:
+                "repeat(2, minmax(0, 1fr))",
 
-              lg: "repeat(4, minmax(0, 1fr))",
+              lg:
+                "repeat(3, minmax(0, 1fr))",
             },
 
             gap: 2.5,
@@ -202,6 +247,7 @@ function CaissierDemandeView() {
             </Typography>
           </Box>
 
+
           <Box>
             <Typography
               variant="caption"
@@ -225,6 +271,7 @@ function CaissierDemandeView() {
             </Typography>
           </Box>
 
+
           <Box>
             <Typography
               variant="caption"
@@ -243,29 +290,200 @@ function CaissierDemandeView() {
             </Typography>
           </Box>
 
-          <Box>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-            >
-              Référence foncière
-            </Typography>
 
-            <Typography
-              variant="body1"
+          {isLegacy && (
+            <Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+              >
+                Référence foncière
+              </Typography>
+
+              <Typography
+                variant="body1"
+                sx={{
+                  fontWeight: 700,
+                }}
+              >
+                {
+                  demande.referenceFonciere ||
+                  "Non renseignée"
+                }
+              </Typography>
+            </Box>
+          )}
+
+
+          {!isLegacy && (
+            <Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+              >
+                Nature
+              </Typography>
+
+              <Typography
+                variant="body1"
+                sx={{
+                  fontWeight: 700,
+                }}
+              >
+                {getNatureLabel(
+                  demande.nature
+                )}
+              </Typography>
+            </Box>
+          )}
+
+
+          {isPrestation && (
+            <Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+              >
+                Prestation
+              </Typography>
+
+              <Typography
+                variant="body1"
+                sx={{
+                  fontWeight: 700,
+                }}
+              >
+                {
+                  demande
+                    .prestation
+                    ?.libelle ??
+                  demande
+                    .tarification
+                    ?.prestationLibelle ??
+                  "Non renseignée"
+                }
+              </Typography>
+            </Box>
+          )}
+
+
+          {!isLegacy &&
+            demande.titreFoncier && (
+            <>
+              <Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                >
+                  Numéro du titre foncier
+                </Typography>
+
+                <Typography
+                  variant="body1"
+                  sx={{
+                    fontWeight: 700,
+                  }}
+                >
+                  {
+                    demande
+                      .titreFoncier
+                      .numero
+                  }
+                </Typography>
+              </Box>
+
+              <Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                >
+                  Gouvernorat
+                </Typography>
+
+                <Typography
+                  variant="body1"
+                  sx={{
+                    fontWeight: 700,
+                  }}
+                >
+                  {
+                    demande
+                      .titreFoncier
+                      .gouvernorat
+                      .nom
+                  }
+                </Typography>
+              </Box>
+            </>
+          )}
+
+
+          {isPrestation &&
+            !demande.titreFoncier && (
+            <Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+              >
+                Titre foncier
+              </Typography>
+
+              <Typography
+                variant="body1"
+                color="text.secondary"
+                sx={{
+                  fontWeight: 600,
+                }}
+              >
+                Non requis
+              </Typography>
+            </Box>
+          )}
+
+
+          {isInscription && (
+            <Box
               sx={{
-                fontWeight: 700,
+                gridColumn: {
+                  xs: "auto",
+                  sm: "1 / -1",
+                },
               }}
             >
-              {
-                demande.referenceFonciere
-              }
-            </Typography>
-          </Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+              >
+                Opération(s) foncière(s)
+              </Typography>
+
+              <Typography
+                variant="body1"
+                sx={{
+                  fontWeight: 700,
+                }}
+              >
+                {demande
+                  .operationsFoncieres
+                  ?.length
+                  ? demande
+                      .operationsFoncieres
+                      .map(
+                        (
+                          operation
+                        ) =>
+                          operation
+                            .typeOperationFonciere
+                            .libelle
+                      )
+                      .join(", ")
+                  : "Non renseignée"}
+              </Typography>
+            </Box>
+          )}
         </Box>
       </Paper>
 
-      {/* Encaissement uniquement */}
 
       <PaiementSection
         demande={
@@ -278,5 +496,6 @@ function CaissierDemandeView() {
     </Box>
   );
 }
+
 
 export default CaissierDemandeView;

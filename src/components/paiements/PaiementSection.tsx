@@ -18,7 +18,6 @@ import PrintRoundedIcon from "@mui/icons-material/PrintRounded";
 import axios from "axios";
 
 import {
-  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -26,6 +25,7 @@ import {
 
 import {
   useForm,
+  useWatch,
 } from "react-hook-form";
 
 import {
@@ -37,6 +37,7 @@ import {
 } from "react-toastify";
 
 import {
+  NatureDemande,
   StatutDemande,
 } from "../../types/demande";
 
@@ -95,6 +96,8 @@ interface ApiErrorResponse {
     message?: string;
   }>;
 }
+
+
 
 function getErrorMessage(
   error: unknown
@@ -244,9 +247,9 @@ function PaiementSection({
     );
 
   const {
+    control,
     register,
     handleSubmit,
-    watch,
     reset,
 
     formState: {
@@ -267,18 +270,26 @@ function PaiementSection({
     });
 
   const montantRemis =
-    watch("montantRemis") ??
-    "";
+    useWatch({
+      control,
+      name: "montantRemis",
+    }) ?? "";
+
+  const montantTarifaire =
+    demande.nature != null &&
+    demande.tarification
+      ? demande.tarification
+          .montantTotal
+      : demande.montantTotal;
 
   const montantExigible =
     useMemo(
       () =>
         Number(
-          demande.montantTotal
+          montantTarifaire
         ),
       [
-        demande
-          .montantTotal,
+        montantTarifaire,
       ]
     );
 
@@ -347,33 +358,48 @@ function PaiementSection({
   /*
    * Recherche le paiement associé
    * à la demande.
+   *
+   * Les mises à jour d’état sont effectuées
+   * uniquement après la résolution de la requête
+   * asynchrone. Cela évite les setState synchrones
+   * directement déclenchés par l’effet.
    */
-  const loadPaiement =
-    useCallback(
+  useEffect(() => {
+    let active = true;
+
+    const chargerPaiement =
       async () => {
         try {
-          setLoading(
-            true
-          );
-
-          setLoadError(
-            null
-          );
-
           const result =
             await paiementService
               .getByDemandeId(
                 demande.id
               );
 
+          if (!active) {
+            return;
+          }
+
           setPaiement(
             result
+          );
+
+          setLoadError(
+            null
+          );
+
+          setLoading(
+            false
           );
 
           onPaiementChange?.(
             result
           );
         } catch (error) {
+          if (!active) {
+            return;
+          }
+
           /*
            * L’absence de paiement est normale
            * pour une demande nouvellement créée.
@@ -389,6 +415,14 @@ function PaiementSection({
               null
             );
 
+            setLoadError(
+              null
+            );
+
+            setLoading(
+              false
+            );
+
             onPaiementChange?.(
               null
             );
@@ -401,21 +435,22 @@ function PaiementSection({
               error
             )
           );
-        } finally {
+
           setLoading(
             false
           );
         }
-      },
-      [
-        demande.id,
-        onPaiementChange,
-      ]
-    );
+      };
 
-  useEffect(() => {
-    void loadPaiement();
-  }, [loadPaiement]);
+    void chargerPaiement();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    demande.id,
+    onPaiementChange,
+  ]);
 
   /*
    * Enregistre le paiement.
@@ -985,135 +1020,395 @@ function PaiementSection({
               être transmise au responsable.
             </Alert>
 
-            <Box
-              sx={{
-                display: "grid",
-
-                gridTemplateColumns:
-                  {
-                    xs: "1fr",
-
-                    sm: "repeat(2, minmax(0, 1fr))",
-                  },
-
-                gap: 2.5,
-              }}
-            >
-              <Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                >
-                  Nombre d’exemplaires
-                </Typography>
-
-                <Typography
-                  variant="body1"
+            {demande.nature == null ? (
+              <>
+                <Alert
+                  severity="info"
+                  variant="outlined"
                   sx={{
-                    fontWeight:
-                      700,
+                    mb: 3,
                   }}
                 >
-                  {
-                    demande
-                      .nombreExemplaires
-                  }
-                </Typography>
-              </Box>
+                  Cette demande utilise
+                  l’ancien modèle tarifaire.
+                  Les informations historiques
+                  sont conservées pour assurer
+                  la compatibilité.
+                </Alert>
 
-              <Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                >
-                  Langue
-                </Typography>
-
-                <Typography
-                  variant="body1"
+                <Box
                   sx={{
-                    fontWeight:
-                      700,
+                    display: "grid",
+
+                    gridTemplateColumns:
+                      {
+                        xs: "1fr",
+
+                        sm: "repeat(2, minmax(0, 1fr))",
+                      },
+
+                    gap: 2.5,
                   }}
                 >
-                  {getLangueLabel(
-                    demande
-                      .langueCertificat
-                  )}
-                </Typography>
-              </Box>
+                  <Box>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                    >
+                      Nombre d’exemplaires
+                    </Typography>
 
-              <Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                >
-                  Prix unitaire
-                </Typography>
+                    <Typography
+                      variant="body1"
+                      sx={{
+                        fontWeight:
+                          700,
+                      }}
+                    >
+                      {
+                        demande
+                          .nombreExemplaires
+                      }
+                    </Typography>
+                  </Box>
 
-                <Typography
-                  variant="body1"
+                  <Box>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                    >
+                      Langue
+                    </Typography>
+
+                    <Typography
+                      variant="body1"
+                      sx={{
+                        fontWeight:
+                          700,
+                      }}
+                    >
+                      {getLangueLabel(
+                        demande
+                          .langueCertificat
+                      )}
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                    >
+                      Prix unitaire
+                    </Typography>
+
+                    <Typography
+                      variant="body1"
+                      sx={{
+                        fontWeight:
+                          700,
+                      }}
+                    >
+                      {formatMontant(
+                        demande
+                          .prixUnitaire
+                      )}
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                    >
+                      Supplément de traduction
+                    </Typography>
+
+                    <Typography
+                      variant="body1"
+                      sx={{
+                        fontWeight:
+                          700,
+                      }}
+                    >
+                      {formatMontant(
+                        demande
+                          .supplementTraduction
+                      )}
+                    </Typography>
+                  </Box>
+                </Box>
+              </>
+            ) : (
+              <>
+                <Box
                   sx={{
-                    fontWeight:
-                      700,
+                    display: "flex",
+                    justifyContent:
+                      "space-between",
+                    alignItems:
+                      "center",
+                    flexWrap:
+                      "wrap",
+                    gap: 1.5,
+                    mb: 2,
                   }}
                 >
-                  {formatMontant(
-                    demande
-                      .prixUnitaire
-                  )}
-                </Typography>
-              </Box>
+                  <Box>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{
+                        fontWeight:
+                          800,
+                      }}
+                    >
+                      Tarification réglementaire
+                    </Typography>
 
-              <Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                >
-                  Supplément de traduction
-                </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                    >
+                      Montant calculé et enregistré
+                      par le serveur.
+                    </Typography>
+                  </Box>
 
-                <Typography
-                  variant="body1"
-                  sx={{
-                    fontWeight:
-                      700,
-                  }}
-                >
-                  {formatMontant(
-                    demande
-                      .supplementTraduction
-                  )}
-                </Typography>
-              </Box>
-            </Box>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight:
+                        700,
+                      color:
+                        "primary.main",
+                    }}
+                  >
+                    {demande.nature ===
+                    NatureDemande.INSCRIPTION
+                      ? "Inscription foncière"
+                      : "Prestation"}
+                  </Typography>
+                </Box>
 
-            <Alert
-              severity="info"
-              sx={{
-                mt: 3,
-              }}
-            >
-              <Typography
-                variant="body2"
-              >
-                Montant total à encaisser
-              </Typography>
+                {demande.tarification ? (
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      overflow:
+                        "hidden",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        px: 2.5,
+                      }}
+                    >
+                      {demande
+                        .tarification
+                        .lignes
+                        .slice()
+                        .sort(
+                          (
+                            a,
+                            b
+                          ) =>
+                            a.ordre -
+                            b.ordre
+                        )
+                        .map(
+                          (
+                            ligne
+                          ) => (
+                            <Box
+                              key={
+                                ligne.id
+                              }
+                              sx={{
+                                display:
+                                  "grid",
 
-              <Typography
-                variant="h5"
+                                gridTemplateColumns:
+                                  {
+                                    xs:
+                                      "1fr",
+
+                                    sm:
+                                      "minmax(0, 1fr) auto",
+                                  },
+
+                                gap:
+                                  1,
+
+                                py:
+                                  1.5,
+
+                                borderBottom:
+                                  "1px solid",
+
+                                borderColor:
+                                  "divider",
+                              }}
+                            >
+                              <Box>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontWeight:
+                                      700,
+                                  }}
+                                >
+                                  {
+                                    ligne
+                                      .libelle
+                                  }
+                                </Typography>
+
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  Quantité :{" "}
+                                  {
+                                    ligne
+                                      .quantite
+                                  }
+                                  {" × "}
+                                  {formatMontant(
+                                    ligne
+                                      .montantUnitaire
+                                  )}
+                                </Typography>
+                              </Box>
+
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  fontWeight:
+                                    800,
+
+                                  whiteSpace:
+                                    "nowrap",
+                                }}
+                              >
+                                {formatMontant(
+                                  ligne
+                                    .montant
+                                )}
+                              </Typography>
+                            </Box>
+                          )
+                        )}
+                    </Box>
+
+                    {demande
+                      .tarification
+                      .referenceReglementaire && (
+                      <Box
+                        sx={{
+                          px:
+                            2.5,
+
+                          pt:
+                            1.5,
+                        }}
+                      >
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                        >
+                          Référence réglementaire :{" "}
+                          {
+                            demande
+                              .tarification
+                              .referenceReglementaire
+                          }
+                        </Typography>
+                      </Box>
+                    )}
+
+                    <Box
+                      sx={{
+                        px: 2.5,
+                        py: 2,
+                        mt: 1.5,
+                        display:
+                          "flex",
+                        justifyContent:
+                          "space-between",
+                        alignItems:
+                          "center",
+                        gap: 2,
+                        bgcolor:
+                          "action.hover",
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          fontWeight:
+                            800,
+                        }}
+                      >
+                        Montant total à encaisser
+                      </Typography>
+
+                      <Typography
+                        variant="h5"
+                        sx={{
+                          fontWeight:
+                            900,
+                          color:
+                            "primary.main",
+                        }}
+                      >
+                        {formatMontant(
+                          demande
+                            .tarification
+                            .montantTotal
+                        )}
+                      </Typography>
+                    </Box>
+                  </Paper>
+                ) : (
+                  <Alert
+                    severity="error"
+                  >
+                    La tarification réglementaire
+                    de cette demande est
+                    indisponible. Le paiement ne
+                    doit pas être enregistré avant
+                    vérification.
+                  </Alert>
+                )}
+              </>
+            )}
+
+            {demande.nature == null && (
+              <Alert
+                severity="info"
                 sx={{
-                  mt: 0.5,
-                  fontWeight:
-                    800,
+                  mt: 3,
                 }}
               >
-                {formatMontant(
-                  demande
-                    .montantTotal
-                )}
-              </Typography>
-            </Alert>
+                <Typography
+                  variant="body2"
+                >
+                  Montant total à encaisser
+                </Typography>
+
+                <Typography
+                  variant="h5"
+                  sx={{
+                    mt: 0.5,
+                    fontWeight:
+                      800,
+                  }}
+                >
+                  {formatMontant(
+                    montantExigible
+                  )}
+                </Typography>
+              </Alert>
+            )}
 
             {canCreatePaiement ? (
               <Box
@@ -1250,6 +1545,11 @@ function PaiementSection({
                     }
                     disabled={
                       submitting ||
+                      montantExigible <= 0 ||
+                      (
+                        demande.nature != null &&
+                        !demande.tarification
+                      ) ||
                       montantRemisNombre <
                         montantExigible
                     }
