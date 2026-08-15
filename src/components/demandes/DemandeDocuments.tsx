@@ -29,6 +29,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
+import PrintRoundedIcon from "@mui/icons-material/PrintRounded";
 
 import axios from "axios";
 
@@ -41,6 +42,7 @@ import {
 } from "react-toastify";
 
 import demandeDocumentService from "../../services/demande-document.service";
+import demandeService from "../../services/demande.service";
 
 import {
   StatutDocument,
@@ -118,6 +120,13 @@ function getErrorMessage(
       responseData?.message ??
       fallbackMessage
     );
+  }
+
+  if (
+    error instanceof Error &&
+    error.message
+  ) {
+    return error.message;
   }
 
   return fallbackMessage;
@@ -248,6 +257,11 @@ function DemandeDocuments({
     setDeleting,
   ] = useState(false);
 
+  const [
+    printingRecapitulatif,
+    setPrintingRecapitulatif,
+  ] = useState(false);
+
   const identityDocumentExists =
     documents.some(
       (documentItem) =>
@@ -256,6 +270,47 @@ function DemandeDocuments({
         documentItem.type ===
           TypeDocument.PASSEPORT
     );
+
+  const contratExists =
+    documents.some(
+      (documentItem) =>
+        documentItem.type ===
+        TypeDocument.CONTRAT
+    );
+
+  const procurationExists =
+    documents.some(
+      (documentItem) =>
+        documentItem.type ===
+        TypeDocument.PROCURATION
+    );
+
+  const dossierDocumentaireComplet =
+    identityDocumentExists &&
+    contratExists &&
+    procurationExists;
+
+  /*
+   * Le récapitulatif avant paiement est réservé
+   * à l'Agent ou à l'Administrateur tant que la
+   * demande est encore EN_ATTENTE et non payée.
+   *
+   * Le bouton reste visible mais désactivé tant
+   * que toutes les pièces obligatoires ne sont
+   * pas présentes.
+   */
+  const canShowRecapitulatif =
+    !documentsLocked &&
+    demandeStatut ===
+      StatutDemande.EN_ATTENTE &&
+    (
+      isAdmin ||
+      isAgent
+    );
+
+  const canPrintRecapitulatif =
+    canShowRecapitulatif &&
+    dossierDocumentaireComplet;
 
   const availableTypes =
     DOCUMENT_TYPES.filter((type) => {
@@ -512,6 +567,104 @@ function DemandeDocuments({
       );
     }
   };
+
+  /*
+   * Génère et ouvre le récapitulatif PDF dans
+   * un nouvel onglet afin que l'agent puisse
+   * le vérifier puis l'imprimer.
+   *
+   * La fenêtre est ouverte immédiatement pour
+   * éviter le blocage des pop-up pendant la
+   * récupération du PDF depuis le backend.
+   */
+  const handlePrintRecapitulatif =
+    async () => {
+      if (!canPrintRecapitulatif) {
+        toast.error(
+          "Le récapitulatif est disponible uniquement lorsque CIN ou passeport, contrat et procuration sont présents."
+        );
+
+        return;
+      }
+
+      const previewWindow =
+        window.open(
+          "",
+          "_blank"
+        );
+
+      if (!previewWindow) {
+        toast.error(
+          "Le navigateur a bloqué l'ouverture du récapitulatif. Autorisez les fenêtres pop-up."
+        );
+
+        return;
+      }
+
+      previewWindow.opener = null;
+
+      previewWindow.document.title =
+        "Préparation du récapitulatif";
+
+      previewWindow.document.body.innerHTML = `
+        <div
+          style="
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: Arial, sans-serif;
+            color: #555;
+          "
+        >
+          Préparation du récapitulatif...
+        </div>
+      `;
+
+      try {
+        setPrintingRecapitulatif(true);
+
+        const blob =
+          await demandeService
+            .getRecapitulatif(
+              demandeId
+            );
+
+        const url =
+          window.URL.createObjectURL(
+            blob
+          );
+
+        previewWindow.location.href =
+          url;
+
+        /*
+         * Le PDF reste disponible suffisamment
+         * longtemps pour être chargé et imprimé.
+         */
+        window.setTimeout(() => {
+          window.URL.revokeObjectURL(
+            url
+          );
+        }, 60000);
+      } catch (printError) {
+        previewWindow.close();
+
+        console.error(
+          "Erreur génération récapitulatif :",
+          printError
+        );
+
+        toast.error(
+          getErrorMessage(
+            printError,
+            "Impossible de générer le récapitulatif de la demande."
+          )
+        );
+      } finally {
+        setPrintingRecapitulatif(false);
+      }
+    };
 
   const openStatusDialog = (
     documentItem: DemandeDocument,
@@ -772,22 +925,51 @@ function DemandeDocuments({
             </Typography>
           </Box>
 
-          {canUploadDocuments && (
-            <Button
-              variant="contained"
-              startIcon={
-                <UploadFileIcon />
-              }
-              disabled={
-                availableTypes.length === 0
-              }
-              onClick={
-                handleOpenUploadDialog
-              }
-            >
-              Ajouter un document
-            </Button>
-          )}
+          <Stack
+            direction="row"
+            spacing={1.5}
+            sx={{
+              flexWrap: "wrap",
+              rowGap: 1.5,
+            }}
+          >
+            {canUploadDocuments && (
+              <Button
+                variant="contained"
+                startIcon={
+                  <UploadFileIcon />
+                }
+                disabled={
+                  availableTypes.length === 0
+                }
+                onClick={
+                  handleOpenUploadDialog
+                }
+              >
+                Ajouter un document
+              </Button>
+            )}
+
+            {canShowRecapitulatif && (
+              <Button
+                variant="outlined"
+                startIcon={
+                  <PrintRoundedIcon />
+                }
+                disabled={
+                  !canPrintRecapitulatif ||
+                  printingRecapitulatif
+                }
+                onClick={
+                  handlePrintRecapitulatif
+                }
+              >
+                {printingRecapitulatif
+                  ? "Préparation..."
+                  : "Imprimer le récapitulatif"}
+              </Button>
+            )}
+          </Stack>
         </Stack>
 
         {documentsLocked &&

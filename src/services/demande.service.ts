@@ -156,6 +156,30 @@ class DemandeService {
 
   /**
    * ==========================================================
+   * RECAPITULATIF AVANT PAIEMENT
+   * ==========================================================
+   *
+   * Le backend renvoie directement un PDF.
+   * Le fichier est récupéré sous forme de Blob afin d'être
+   * ouvert dans le navigateur puis imprimé par l'agent.
+   */
+  async getRecapitulatif(
+    id: string
+  ): Promise<Blob> {
+    const response =
+      await api.get<Blob>(
+        `/demandes/${id}/recapitulatif`,
+        {
+          responseType: "blob",
+        }
+      );
+
+    return response.data;
+  }
+
+
+  /**
+   * ==========================================================
    * SUPPRESSION
    * ==========================================================
    */
