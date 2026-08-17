@@ -43,6 +43,7 @@ import DemandeDetails from "./DemandeDetails";
 import DemandeDocuments from "./DemandeDocuments";
 import DemandeHistory from "./DemandeHistory";
 import PaiementSection from "../paiements/PaiementSection";
+import ResponsableControleSection from "./ResponsableControleSection";
 
 import {
   useAuth,
@@ -559,13 +560,19 @@ function StandardDemandeView() {
     canManageTransmission &&
     !isCniVerified;
 
+  /*
+   * Les anciens boutons Valider / Rejeter restent disponibles
+   * uniquement pour l'Administrateur pendant la transition.
+   *
+   * Le Responsable Guichet ne rejette pas le dossier : son
+   * interface métier passe désormais par la section de contrôle
+   * dédiée ci-dessous. La validation métier Responsable sera
+   * branchée dans une étape distincte.
+   */
   const canDecide =
     demande.statut ===
       StatutDemande.EN_COURS &&
-    (
-      isAdmin ||
-      isResponsable
-    );
+    isAdmin;
 
   const handleVerifyStoredCni =
     async () => {
@@ -756,10 +763,9 @@ function StandardDemandeView() {
               mb: 3,
             }}
           >
-            Vérifiez les informations et la
-            conformité de toutes les pièces
-            avant de valider ou de rejeter
-            cette demande.
+            Contrôlez les informations du dossier et les pièces justificatives.
+            Si une donnée foncière doit être rectifiée, utilisez la section
+            « Contrôle du Responsable Guichet ».
           </Alert>
         )}
 
@@ -890,6 +896,31 @@ function StandardDemandeView() {
           demande
         }
       />
+
+      {/* Contrôle métier du Responsable Guichet */}
+
+      {demande.statut ===
+        StatutDemande.EN_COURS &&
+        (
+          isResponsable ||
+          isAdmin
+        ) && (
+          <Box
+            sx={{
+              mt: 4,
+            }}
+          >
+            <ResponsableControleSection
+              demande={demande}
+              onCorrectionApplied={async () => {
+                await Promise.all([
+                  reload(),
+                  reloadHistory(),
+                ]);
+              }}
+            />
+          </Box>
+        )}
 
       {/* Vérification de l’identité CNI */}
 
