@@ -1178,5 +1178,4 @@ function ResponsableControleSection({
     </Paper>
   );
 }
-
 export default ResponsableControleSection;

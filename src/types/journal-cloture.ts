@@ -1,4 +1,5 @@
 import type {
+  NatureDemande,
   StatutDemande,
 } from "./demande";
 
@@ -9,13 +10,48 @@ export interface ResponsableCloture {
   login: string;
 }
 
+export interface GouvernoratCloture {
+  id: string;
+  code: string;
+  nom: string;
+}
+
+export interface TitreFoncierCloture {
+  numero: string;
+  gouvernorat: GouvernoratCloture;
+}
+
+export interface PrestationCloture {
+  id: string;
+  code: string;
+  libelle: string;
+}
+
 export interface DemandeCloture {
   id: string;
   numero: string;
   nomDemandeur: string;
   prenomDemandeur: string;
   cin?: string;
-  referenceFonciere?: string;
+
+  /**
+   * Nouveau modèle métier.
+   *
+   * nature peut rester absente/null pour les anciennes
+   * demandes conservées pendant la migration.
+   */
+  nature?: NatureDemande | null;
+
+  titreFoncier?: TitreFoncierCloture | null;
+
+  prestation?: PrestationCloture | null;
+
+  /**
+   * Champ legacy conservé uniquement comme solution de repli
+   * pour les anciennes demandes.
+   */
+  referenceFonciere?: string | null;
+
   statut: StatutDemande;
   motifRejet?: string | null;
   updatedAt?: string;

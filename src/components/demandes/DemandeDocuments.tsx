@@ -28,7 +28,6 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import DownloadIcon from "@mui/icons-material/Download";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import CancelIcon from "@mui/icons-material/Cancel";
 import PrintRoundedIcon from "@mui/icons-material/PrintRounded";
 
 import axios from "axios";
@@ -173,8 +172,13 @@ function DemandeDocuments({
 
   /*
    * Le Responsable ou l’Administrateur
-   * peut vérifier les pièces uniquement
+   * peut contrôler les pièces uniquement
    * lorsque la demande est EN_COURS.
+   *
+   * Dans le workflow actuel, l'action métier
+   * exposée dans l'interface consiste à marquer
+   * chaque pièce obligatoire comme CONFORME
+   * afin de tracer son contrôle avant validation.
    */
   const canVerifyDocuments =
     demandeStatut ===
@@ -289,6 +293,42 @@ function DemandeDocuments({
     identityDocumentExists &&
     contratExists &&
     procurationExists;
+
+  const identityDocumentConforme =
+    documents.some(
+      (documentItem) =>
+        (
+          documentItem.type ===
+            TypeDocument.CIN ||
+          documentItem.type ===
+            TypeDocument.PASSEPORT
+        ) &&
+        documentItem.statut ===
+          StatutDocument.CONFORME
+    );
+
+  const contratConforme =
+    documents.some(
+      (documentItem) =>
+        documentItem.type ===
+          TypeDocument.CONTRAT &&
+        documentItem.statut ===
+          StatutDocument.CONFORME
+    );
+
+  const procurationConforme =
+    documents.some(
+      (documentItem) =>
+        documentItem.type ===
+          TypeDocument.PROCURATION &&
+        documentItem.statut ===
+          StatutDocument.CONFORME
+    );
+
+  const dossierDocumentsConformes =
+    identityDocumentConforme &&
+    contratConforme &&
+    procurationConforme;
 
   /*
    * Le récapitulatif avant paiement est réservé
@@ -1030,15 +1070,16 @@ function DemandeDocuments({
         {!demandeTerminee &&
           isResponsable &&
           demandeStatut ===
-            StatutDemande.EN_COURS && (
+            StatutDemande.EN_COURS &&
+          !dossierDocumentsConformes && (
             <Alert
               severity="warning"
               sx={{ mb: 3 }}
             >
               Vérifiez chaque pièce
-              justificative et déclarez-la
-              conforme ou non conforme avant
-              de prendre une décision.
+              justificative et marquez-la
+              conforme avant de valider le
+              dossier.
             </Alert>
           )}
 
@@ -1183,35 +1224,19 @@ function DemandeDocuments({
                         {canVerifyDocuments &&
                           documentItem.statut ===
                             StatutDocument.DEPOSE && (
-                            <>
-                              <IconButton
-                                color="success"
-                                title="Déclarer conforme"
-                                aria-label={`Déclarer ${documentItem.nomOriginal} conforme`}
-                                onClick={() =>
-                                  openStatusDialog(
-                                    documentItem,
-                                    StatutDocument.CONFORME
-                                  )
-                                }
-                              >
-                                <CheckCircleIcon />
-                              </IconButton>
-
-                              <IconButton
-                                color="warning"
-                                title="Déclarer non conforme"
-                                aria-label={`Déclarer ${documentItem.nomOriginal} non conforme`}
-                                onClick={() =>
-                                  openStatusDialog(
-                                    documentItem,
-                                    StatutDocument.NON_CONFORME
-                                  )
-                                }
-                              >
-                                <CancelIcon />
-                              </IconButton>
-                            </>
+                            <IconButton
+                              color="success"
+                              title="Marquer conforme"
+                              aria-label={`Marquer ${documentItem.nomOriginal} conforme`}
+                              onClick={() =>
+                                openStatusDialog(
+                                  documentItem,
+                                  StatutDocument.CONFORME
+                                )
+                              }
+                            >
+                              <CheckCircleIcon />
+                            </IconButton>
                           )}
 
                         {canDeleteDocuments && (
@@ -1367,7 +1392,7 @@ function DemandeDocuments({
           >
             {nextDocumentStatus ===
             StatutDocument.CONFORME
-              ? "Confirmez-vous que ce document est conforme ?"
+              ? "Confirmez-vous avoir contrôlé ce document et qu’il est conforme ?"
               : "Indiquez pourquoi ce document est non conforme."}
           </DialogContentText>
 

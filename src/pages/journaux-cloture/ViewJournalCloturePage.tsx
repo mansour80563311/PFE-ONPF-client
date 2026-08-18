@@ -41,6 +41,10 @@ import {
 
 import PageHeader from "../../components/common/PageHeader";
 
+import type {
+  DemandeCloture,
+} from "../../types/journal-cloture";
+
 import {
   useJournalCloture,
 } from "../../hooks/useJournalCloture";
@@ -164,6 +168,68 @@ function DetailItem({
         {value}
       </Typography>
     </Box>
+  );
+}
+
+function getNatureLabel(
+  nature?: string | null
+): string {
+  switch (nature) {
+    case "INSCRIPTION":
+      return "Inscription foncière";
+
+    case "PRESTATION":
+      return "Prestation";
+
+    default:
+      return "Ancienne demande";
+  }
+}
+
+function getDossierLabel(
+  demande: DemandeCloture
+): string {
+  if (
+    demande.nature ===
+    "INSCRIPTION"
+  ) {
+    if (
+      demande.titreFoncier
+        ?.numero
+    ) {
+      return `Titre foncier ${demande.titreFoncier.numero}`;
+    }
+
+    return (
+      demande.referenceFonciere ??
+      "Titre foncier non renseigné"
+    );
+  }
+
+  if (
+    demande.nature ===
+    "PRESTATION"
+  ) {
+    return (
+      demande.prestation
+        ?.libelle ??
+      "Prestation non renseignée"
+    );
+  }
+
+  return (
+    demande.referenceFonciere ??
+    "Information non disponible"
+  );
+}
+
+function getGouvernoratLabel(
+  demande: DemandeCloture
+): string {
+  return (
+    demande.titreFoncier
+      ?.gouvernorat?.nom ??
+    "—"
   );
 }
 
@@ -634,7 +700,7 @@ function ViewJournalCloturePage() {
           <SectionHeader
             icon={<AssignmentRoundedIcon />}
             title="Demandes clôturées"
-            subtitle="Demandes finalisées et rattachées à ce journal de clôture."
+            subtitle="Demandes validées au niveau du guichet et rattachées à ce journal de clôture."
           />
 
           {demandes.length > 0 && (
@@ -658,8 +724,9 @@ function ViewJournalCloturePage() {
             severity="info"
             variant="outlined"
           >
-            Aucune demande n’est rattachée à
-            ce journal.
+            Aucune demande validée au niveau
+            du guichet n’est rattachée à ce
+            journal.
           </Alert>
         ) : (
           <>
@@ -679,7 +746,7 @@ function ViewJournalCloturePage() {
             >
               <Table
                 sx={{
-                  minWidth: 1050,
+                  minWidth: 1200,
                 }}
               >
                 <TableHead>
@@ -697,15 +764,19 @@ function ViewJournalCloturePage() {
                     </TableCell>
 
                     <TableCell>
-                      Référence foncière
+                      Nature
                     </TableCell>
 
                     <TableCell>
-                      Statut
+                      Titre foncier / prestation
                     </TableCell>
 
                     <TableCell>
-                      Dernière modification
+                      Gouvernorat
+                    </TableCell>
+
+                    <TableCell>
+                      Statut guichet
                     </TableCell>
 
                     <TableCell align="center">
@@ -762,8 +833,21 @@ function ViewJournalCloturePage() {
                         </TableCell>
 
                         <TableCell>
-                          {demande.referenceFonciere ||
-                            "—"}
+                          {getNatureLabel(
+                            demande.nature
+                          )}
+                        </TableCell>
+
+                        <TableCell>
+                          {getDossierLabel(
+                            demande
+                          )}
+                        </TableCell>
+
+                        <TableCell>
+                          {getGouvernoratLabel(
+                            demande
+                          )}
                         </TableCell>
 
                         <TableCell>
@@ -776,14 +860,6 @@ function ViewJournalCloturePage() {
                             )}
                             size="small"
                           />
-                        </TableCell>
-
-                        <TableCell>
-                          {demande.updatedAt
-                            ? formatDateTime(
-                                demande.updatedAt
-                              )
-                            : "—"}
                         </TableCell>
 
                         <TableCell align="center">
@@ -902,23 +978,50 @@ function ViewJournalCloturePage() {
                       />
 
                       <DetailItem
-                        label="Référence foncière"
-                        value={
-                          demande.referenceFonciere ||
-                          "Non renseignée"
-                        }
+                        label="Nature"
+                        value={getNatureLabel(
+                          demande.nature
+                        )}
                       />
 
                       <DetailItem
-                        label="Dernière modification"
+                        label="Titre foncier / prestation"
+                        value={getDossierLabel(
+                          demande
+                        )}
+                      />
+
+                      <DetailItem
+                        label="Gouvernorat"
+                        value={getGouvernoratLabel(
+                          demande
+                        )}
+                      />
+
+                      <DetailItem
+                        label="Statut guichet"
                         value={
-                          demande.updatedAt
-                            ? formatDateTime(
-                                demande.updatedAt
-                              )
-                            : "Non disponible"
+                          <Chip
+                            label={getStatusLabel(
+                              demande.statut
+                            )}
+                            color={getStatusColor(
+                              demande.statut
+                            )}
+                            size="small"
+                          />
                         }
                       />
+
+                      {demande.updatedAt && (
+                        <DetailItem
+                          label="Rattachée au journal le"
+                          value={formatDateTime(
+                            demande.updatedAt
+                          )}
+                          fullWidth
+                        />
+                      )}
                     </Box>
 
                     {demande.motifRejet && (
@@ -936,7 +1039,7 @@ function ViewJournalCloturePage() {
                             mb: 0.4,
                           }}
                         >
-                          Motif du rejet
+                          Motif historique du rejet
                         </Typography>
 
                         <Typography

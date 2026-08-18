@@ -81,6 +81,11 @@ import type {
 } from "../../types/paiement";
 
 import {
+  StatutDocument,
+  TypeDocument,
+} from "../../types/demande-document";
+
+import {
   ROLES,
 } from "../../utils/roles";
 
@@ -354,8 +359,9 @@ function StandardDemandeView() {
 
         case StatutDemande.VALIDEE:
           return (
-            "Voulez-vous valider définitivement cette demande ? " +
-            "Tous les documents obligatoires doivent être conformes."
+            "Voulez-vous valider ce dossier au niveau du guichet ? " +
+            "Toutes les pièces obligatoires doivent avoir été contrôlées et marquées conformes. " +
+            "Un éventuel complément de paiement reste dû, mais ne bloque pas cette validation."
           );
 
         case StatutDemande.REJETEE:
@@ -378,7 +384,7 @@ function StandardDemandeView() {
           return "Transmettre";
 
         case StatutDemande.VALIDEE:
-          return "Valider";
+          return "Valider le dossier";
 
         case StatutDemande.REJETEE:
           return "Rejeter";
@@ -449,7 +455,7 @@ function StandardDemandeView() {
           StatutDemande.VALIDEE
         ) {
           toast.success(
-            "La demande a été validée."
+            "Le dossier a été validé au niveau du guichet."
           );
         } else {
           toast.success(
@@ -561,15 +567,72 @@ function StandardDemandeView() {
     !isCniVerified;
 
   /*
-   * Les anciens boutons Valider / Rejeter restent disponibles
-   * uniquement pour l'Administrateur pendant la transition.
+   * Le Responsable Guichet doit avoir explicitement
+   * contrôlé toutes les pièces obligatoires avant de
+   * pouvoir valider le dossier.
    *
-   * Le Responsable Guichet ne rejette pas le dossier : son
-   * interface métier passe désormais par la section de contrôle
-   * dédiée ci-dessous. La validation métier Responsable sera
-   * branchée dans une étape distincte.
+   * La simple présence des documents ne suffit pas :
+   * CIN ou passeport, contrat et procuration doivent
+   * tous être marqués CONFORME.
    */
-  const canDecide =
+  const identityDocumentConforme =
+    documents.some(
+      (documentItem) =>
+        (
+          documentItem.type ===
+            TypeDocument.CIN ||
+          documentItem.type ===
+            TypeDocument.PASSEPORT
+        ) &&
+        documentItem.statut ===
+          StatutDocument.CONFORME
+    );
+
+  const contratConforme =
+    documents.some(
+      (documentItem) =>
+        documentItem.type ===
+          TypeDocument.CONTRAT &&
+        documentItem.statut ===
+          StatutDocument.CONFORME
+    );
+
+  const procurationConforme =
+    documents.some(
+      (documentItem) =>
+        documentItem.type ===
+          TypeDocument.PROCURATION &&
+        documentItem.statut ===
+          StatutDocument.CONFORME
+    );
+
+  const allRequiredDocumentsConformes =
+    identityDocumentConforme &&
+    contratConforme &&
+    procurationConforme;
+
+  /*
+   * Le Responsable valide le dossier au niveau du guichet.
+   * Il ne dispose plus de l'action de rejet.
+   *
+   * L'Administrateur conserve provisoirement les actions
+   * Valider / Rejeter pour les interventions exceptionnelles.
+   */
+  const canValidate =
+    demande.statut ===
+      StatutDemande.EN_COURS &&
+    (
+      isResponsable ||
+      isAdmin
+    );
+
+  const canValidateNow =
+    canValidate &&
+    !loadingDocuments &&
+    !documentsError &&
+    allRequiredDocumentsConformes;
+
+  const canReject =
     demande.statut ===
       StatutDemande.EN_COURS &&
     isAdmin;
@@ -608,7 +671,8 @@ function StandardDemandeView() {
 
   const statusActions =
     canManageTransmission ||
-    canDecide ? (
+    canValidate ||
+    canReject ? (
       <Stack
         direction={{
           xs: "column",
@@ -647,44 +711,51 @@ function StandardDemandeView() {
           </Button>
         )}
 
-        {canDecide && (
-          <>
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={
-                <CheckCircleRoundedIcon />
-              }
-              disabled={
-                updating
-              }
-              onClick={() =>
-                openStatusDialog(
-                  StatutDemande.VALIDEE
-                )
-              }
-            >
-              Valider
-            </Button>
+        {canValidate && (
+          <Button
+            variant="contained"
+            color="success"
+            startIcon={
+              <CheckCircleRoundedIcon />
+            }
+            disabled={
+              updating ||
+              !canValidateNow
+            }
+            onClick={() =>
+              openStatusDialog(
+                StatutDemande.VALIDEE
+              )
+            }
+          >
+            {loadingDocuments
+              ? "Vérification des pièces..."
+              : documentsError
+                ? "Pièces indisponibles"
+                : !allRequiredDocumentsConformes
+                  ? "Pièces à contrôler"
+                  : "Valider le dossier"}
+          </Button>
+        )}
 
-            <Button
-              variant="contained"
-              color="error"
-              startIcon={
-                <CancelRoundedIcon />
-              }
-              disabled={
-                updating
-              }
-              onClick={() =>
-                openStatusDialog(
-                  StatutDemande.REJETEE
-                )
-              }
-            >
-              Rejeter
-            </Button>
-          </>
+        {canReject && (
+          <Button
+            variant="contained"
+            color="error"
+            startIcon={
+              <CancelRoundedIcon />
+            }
+            disabled={
+              updating
+            }
+            onClick={() =>
+              openStatusDialog(
+                StatutDemande.REJETEE
+              )
+            }
+          >
+            Rejeter
+          </Button>
         )}
       </Stack>
     ) : undefined;
@@ -763,9 +834,30 @@ function StandardDemandeView() {
               mb: 3,
             }}
           >
-            Contrôlez les informations du dossier et les pièces justificatives.
-            Si une donnée foncière doit être rectifiée, utilisez la section
-            « Contrôle du Responsable Guichet ».
+            Contrôlez les informations du dossier et ouvrez chaque pièce
+            justificative obligatoire avant de la marquer conforme. Si une
+            donnée foncière doit être rectifiée, utilisez la section
+            « Contrôle du Responsable Guichet ». La validation du dossier
+            devient disponible uniquement lorsque toutes les pièces
+            obligatoires sont conformes.
+          </Alert>
+        )}
+
+      {demande.statut ===
+        StatutDemande.EN_COURS &&
+        canValidate &&
+        !loadingDocuments &&
+        !documentsError &&
+        !allRequiredDocumentsConformes && (
+          <Alert
+            severity="warning"
+            sx={{
+              mb: 3,
+            }}
+          >
+            La validation au niveau du guichet est bloquée tant que la pièce
+            d’identité, le contrat et la procuration n’ont pas tous été
+            contrôlés et marqués conformes.
           </Alert>
         )}
 
@@ -777,9 +869,9 @@ function StandardDemandeView() {
               mb: 3,
             }}
           >
-            Cette demande est validée. Son
-            traitement est terminé et ses
-            données sont verrouillées.
+            Cette demande a été validée au niveau du guichet. Elle doit
+            ensuite être prise en compte dans la clôture journalière avant
+            sa transmission au service étude.
           </Alert>
         )}
 
@@ -791,9 +883,8 @@ function StandardDemandeView() {
               mb: 3,
             }}
           >
-            Cette demande a été rejetée. Son
-            traitement est terminé et ses
-            données sont verrouillées.
+            Cette demande a été rejetée dans le cadre d’une intervention
+            administrative. Ses données sont verrouillées.
           </Alert>
         )}
 

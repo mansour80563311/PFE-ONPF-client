@@ -201,7 +201,7 @@ function CreateJournalCloturePage() {
 
       if (result.length === 0) {
         toast.info(
-          "Aucune demande finalisée n’est disponible pour cette journée."
+          "Aucune demande validée au niveau du guichet n’est disponible pour cette journée."
         );
       } else {
         toast.success(
@@ -296,7 +296,7 @@ function CreateJournalCloturePage() {
     >
       <PageHeader
         title="Nouvelle clôture journalière"
-        subtitle="Prévisualisez les demandes finalisées avant de générer le journal de clôture."
+        subtitle="Prévisualisez les demandes validées au niveau du guichet avant de générer le journal de clôture."
         icon={<LockClockRoundedIcon />}
         breadcrumbs={[
           {
@@ -351,10 +351,10 @@ function CreateJournalCloturePage() {
         </AlertTitle>
 
         La clôture rattache définitivement
-        les demandes finalisées de la journée
-        au journal généré. Vérifiez la date et
-        la liste des demandes avant de
-        confirmer.
+        les demandes validées au niveau du
+        guichet pour la journée au journal
+        généré. Vérifiez la date et la liste
+        des demandes avant de confirmer.
       </Alert>
 
       {/* Paramètres */}
@@ -584,8 +584,8 @@ function CreateJournalCloturePage() {
                   mt: 0.35,
                 }}
               >
-                Demandes validées ou
-                rejetées pouvant être
+                Demandes validées au niveau du
+                guichet pouvant être
                 intégrées au journal.
               </Typography>
             </Box>
@@ -631,8 +631,8 @@ function CreateJournalCloturePage() {
               Aucune demande disponible
             </AlertTitle>
 
-            Aucune demande validée ou
-            rejetée n’est disponible pour
+            Aucune demande validée au niveau du
+            guichet n’est disponible pour
             cette journée.
           </Alert>
         ) : (
